@@ -133,6 +133,17 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
     });
   }, [activeEvent]);
 
+  const handleEdgeUpdate = useCallback((edge: RoundEdge) => {
+    setEdges(prev => {
+      const updated = prev.map(e => e.id === edge.id ? edge : e);
+      if (activeEvent) {
+        scheduleRoundsService.saveEdges(activeEvent.id, updated);
+      }
+      return updated;
+    });
+  }, [activeEvent]);
+
+
   const createNewRound = useCallback(() => {
     if (!activeEvent) return;
 
@@ -288,6 +299,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
             onRoundUpdate={handleRoundUpdate}
             onRoundDelete={handleRoundDelete}
             onEdgeCreate={handleEdgeCreate}
+            onEdgeUpdate={handleEdgeUpdate}
             onEdgeDelete={handleEdgeDelete}
             programId={activeEvent.id}
           />

@@ -34,9 +34,12 @@ export function dbRoundToScheduleRound(dbRound: any): Round {
     order: dbRound.sort_order ?? settings.order ?? 0,
     status: mapStatusToScheduleRound(dbRound.status),
     createdAt: dbRound.created_at || new Date().toISOString(),
-    updatedAt: settings.updatedAt || dbRound.created_at || new Date().toISOString(),
-    version: settings.version || 1,
-    metadata: settings.metadata,
+      updatedAt: settings.updatedAt || dbRound.created_at || new Date().toISOString(),
+      version: settings.version || 1,
+      metadata: settings.metadata,
+      inputPorts: settings.inputPorts || undefined,
+      outputPorts: settings.outputPorts || undefined,
+      position: settings.position || undefined,
   };
 }
 
@@ -86,6 +89,9 @@ export function scheduleRoundToDbRound(round: Round): {
       updatedAt: round.updatedAt,
       version: round.version,
       metadata: round.metadata,
+      inputPorts: round.inputPorts,
+      outputPorts: round.outputPorts,
+      position: round.position,
     },
   };
 }

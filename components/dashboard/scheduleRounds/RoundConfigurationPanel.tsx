@@ -1,14 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Round, RoundType, EvaluationLogic, EvaluatorStrategy, StartCondition, EndCondition, EdgeCondition, ShortlistConfig } from '../../../types/scheduleRounds';
-import { X, Save, Trash2, Calendar, Users, Eye, EyeOff, Settings } from 'lucide-react';
+import { Round, RoundType, EvaluationLogic, EvaluatorStrategy, StartCondition, EndCondition, EdgeCondition, ShortlistConfig, OutputPort } from '../../../types/scheduleRounds';
+import { X, Save, Trash2, Calendar, Users, Eye, EyeOff, Settings, Plus } from 'lucide-react';
 import { Button } from '../../Button';
 import { motion, AnimatePresence } from 'framer-motion';
+import { OutputPortConfigModal } from './OutputPortConfigModal';
 
 interface RoundConfigurationPanelProps {
   round: Round;
   onUpdate: (round: Round) => void;
   onDelete: () => void;
   onClose: () => void;
+  incomingEdges?: Array<{ 
+    dataStream?: string;
+    sourceRoundId?: string;
+    sourceHandle?: string;
+  }>; // Edges coming into this round with source info
+  allRounds?: Round[]; // All rounds to resolve output port configurations
 }
 
 export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = ({
@@ -16,11 +23,37 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
   onUpdate,
   onDelete,
   onClose,
+  incomingEdges = [],
+  allRounds = [],
 }) => {
   const [formData, setFormData] = useState<Round>(round);
   const [hasChanges, setHasChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [outputPortModalOpen, setOutputPortModalOpen] = useState(false);
+  const [editingOutputPort, setEditingOutputPort] = useState<OutputPort | undefined>(undefined);
+
+  // Calculate available data streams from incoming edges
+  // Each incoming edge represents ONE data stream
+  // If N inputs exist, we generate N streams (A, B, C, ...) - one per input connection
+  // The modal will show N individual streams + 1 "All Streams" option = N+1 total options
+  const availableDataStreams = React.useMemo(() => {
+    if (incomingEdges.length === 0) {
+      return [];
+    }
+    
+    // Each incoming edge gets a unique stream identifier (A, B, C, D, ...)
+    // This ensures that if there are 3 inputs, we have exactly 3 streams
+    const streams: string[] = [];
+    
+    incomingEdges.forEach((edge, index) => {
+      // Generate stream identifier: A, B, C, D, etc.
+      const streamId = String.fromCharCode(65 + index); // 65 is 'A' in ASCII
+      streams.push(streamId);
+    });
+
+    return streams;
+  }, [incomingEdges]);
 
   // Sync formData when round prop changes
   useEffect(() => {
@@ -44,6 +77,24 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
 
   const handleShortlistConfigChange = (config: Partial<ShortlistConfig>) => {
     handleChange('shortlistConfig', { ...formData.shortlistConfig, ...config });
+  };
+
+  const handleOutputPortSave = (port: OutputPort) => {
+    const currentPorts = formData.outputPorts || [];
+    if (editingOutputPort) {
+      // Update existing port
+      const updated = currentPorts.map(p => p.id === port.id ? port : p);
+      handleChange('outputPorts', updated);
+    } else {
+      // Add new port
+      handleChange('outputPorts', [...currentPorts, port]);
+    }
+    setEditingOutputPort(undefined);
+  };
+
+  const handleOutputPortDelete = (portId: string) => {
+    const updated = (formData.outputPorts || []).filter(p => p.id !== portId);
+    handleChange('outputPorts', updated);
   };
 
   const handleSave = async () => {
@@ -332,7 +383,80 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
               )}
             </div>
           </section>
+
+          {/* Output Ports Configuration */}
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-semibold text-slate-700">Output Ports</h4>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingOutputPort(undefined);
+                  setOutputPortModalOpen(true);
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Output Port
+              </button>
+            </div>
+            <div className="space-y-2">
+              {(formData.outputPorts && formData.outputPorts.length > 0) ? (
+                formData.outputPorts.map((port) => (
+                  <div
+                    key={port.id}
+                    className="flex items-center justify-between p-3 border border-slate-200 rounded-lg bg-slate-50"
+                  >
+                    <div className="flex-1">
+                      <div className="font-medium text-sm text-slate-800">{port.name}</div>
+                      <div className="text-xs text-slate-500 mt-0.5">
+                        Processes: {port.dataStreams.length > 0 ? port.dataStreams.join(', ') : 'None'}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingOutputPort(port);
+                          setOutputPortModalOpen(true);
+                        }}
+                        className="px-2 py-1 text-xs text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleOutputPortDelete(port.id)}
+                        className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded transition-colors"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-4 text-sm text-slate-500 border border-dashed border-slate-200 rounded-lg">
+                  {availableDataStreams.length === 0 
+                    ? 'No input connections yet. Connect other rounds to this one first to create output ports.'
+                    : 'No output ports configured. Click "Add Output Port" to create one.'
+                  }
+                </div>
+              )}
+            </div>
+          </section>
         </div>
+
+        {/* Output Port Configuration Modal */}
+        <OutputPortConfigModal
+          isOpen={outputPortModalOpen}
+          onClose={() => {
+            setOutputPortModalOpen(false);
+            setEditingOutputPort(undefined);
+          }}
+          onSave={handleOutputPortSave}
+          existingPort={editingOutputPort}
+          availableDataStreams={availableDataStreams}
+        />
 
         {/* Footer */}
         <div className="p-6 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-3">

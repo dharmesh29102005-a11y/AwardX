@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { Round, RoundType } from '../../../types/scheduleRounds';
+import { Round, RoundType, RoundEdge, OutputPort } from '../../../types/scheduleRounds';
 import { Users, Globe, Shield, Settings, CheckCircle2, Clock, XCircle, MoreVertical } from 'lucide-react';
 
 interface RoundNodeData {
@@ -8,10 +8,92 @@ interface RoundNodeData {
   onSelect: () => void;
   isSelected: boolean;
   onCreateChild?: () => void;
+  incomingEdges?: RoundEdge[]; // Edges coming into this node
+  outgoingEdges?: RoundEdge[]; // Edges going out of this node
+  onPortClick?: (portId: string, type: 'input' | 'output') => void;
+  allRounds?: Round[]; // All rounds for resolving output port streams
 }
 
 export const RoundNode: React.FC<NodeProps<RoundNodeData>> = ({ data }) => {
-  const { round, onSelect, isSelected, onCreateChild } = data;
+  const { round, onSelect, isSelected, onCreateChild, incomingEdges = [], outgoingEdges = [], onPortClick, allRounds = [] } = data;
+
+  // Get input ports from round metadata or create defaults
+  const inputPorts = useMemo(() => {
+    if (round.inputPorts && round.inputPorts.length > 0) {
+      return round.inputPorts;
+    }
+    // If no ports defined, create a default one
+    return [{ id: 'input-0', name: 'Input 1' }];
+  }, [round.inputPorts]);
+
+  // Output ports are now configured independently, not based on input count
+
+  // Get unique input handles from edges (to show which ports are used)
+  const usedInputHandles = useMemo(() => {
+    const handles = new Set<string>();
+    incomingEdges.forEach(edge => {
+      if (edge.targetHandle) handles.add(edge.targetHandle);
+    });
+    return handles;
+  }, [incomingEdges]);
+
+  // Get port name by ID
+  const getPortName = (portId: string): string => {
+    const port = inputPorts.find(p => p.id === portId);
+    return port?.name || portId;
+  };
+
+  // Calculate available data streams from incoming edges
+  // Each individual stream (A, B, C, D) should be available separately
+  const availableDataStreams = useMemo(() => {
+    const streams = new Set<string>();
+    
+    incomingEdges.forEach(edge => {
+      // Get individual streams from source round's output port
+      if (edge.sourceRoundId && edge.sourceHandle) {
+        const sourceRound = allRounds.find(r => r.id === edge.sourceRoundId);
+        if (sourceRound?.outputPorts) {
+          const outputPort = sourceRound.outputPorts.find(p => p.id === edge.sourceHandle);
+          if (outputPort && outputPort.dataStreams.length > 0) {
+            // Add each individual stream from the output port
+            outputPort.dataStreams.forEach(stream => streams.add(stream));
+          }
+        }
+      }
+      
+      // Also check edge.dataStream directly for backward compatibility
+      if (edge.dataStream) {
+        const streamList = edge.dataStream.split(',').map(s => s.trim()).filter(s => s && s !== 'all');
+        streamList.forEach(stream => streams.add(stream));
+      }
+    });
+    
+    return Array.from(streams).sort();
+  }, [incomingEdges, allRounds]);
+
+  // Get output ports from round metadata or create a default one
+  // Every node should have at least one output port by default
+  const outputPorts = useMemo(() => {
+    if (round.outputPorts && round.outputPorts.length > 0) {
+      return round.outputPorts;
+    }
+    // Always create a default output port, even if no inputs yet
+    // Default name and empty streams array - will be configured when inputs are connected
+    return [{ 
+      id: 'output-0', 
+      name: 'Output 1', 
+      dataStreams: availableDataStreams.length > 0 ? availableDataStreams : [] 
+    }];
+  }, [round.outputPorts, availableDataStreams]);
+
+  // Get unique output handles from edges
+  const usedOutputHandles = useMemo(() => {
+    const handles = new Set<string>();
+    outgoingEdges.forEach(edge => {
+      if (edge.sourceHandle) handles.add(edge.sourceHandle);
+    });
+    return handles;
+  }, [outgoingEdges]);
 
   const getRoundTypeIcon = (type: RoundType) => {
     switch (type) {
@@ -54,12 +136,35 @@ export const RoundNode: React.FC<NodeProps<RoundNodeData>> = ({ data }) => {
         }
       `}
     >
-      {/* Input Handle - Styled like CategoriesWorkflow */}
-      <Handle
-        type="target"
-        position={Position.Top}
-        className="!w-3 !h-3 !bg-slate-200 !border-2 !border-white !rounded-full !shadow-sm hover:!bg-indigo-500 transition-colors -mt-1.5"
-      />
+      {/* Multiple Input Handles - Using named ports from metadata */}
+      {inputPorts.map((port, index) => {
+        const handleId = port.id;
+        const isUsed = usedInputHandles.has(handleId);
+        return (
+          <Handle
+            key={handleId}
+            type="target"
+            id={handleId}
+            position={Position.Top}
+            style={{
+              left: `${(index + 1) * (100 / (inputPorts.length + 1))}%`,
+            }}
+            className={`!w-3 !h-3 !border-2 !border-white !rounded-full !shadow-sm transition-all
+              ${isUsed 
+                ? '!bg-indigo-500 ring-2 ring-indigo-200' 
+                : '!bg-slate-200 hover:!bg-indigo-400'
+              } -mt-1.5`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPortClick?.(handleId, 'input');
+            }}
+          >
+            <div className="absolute -top-5 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[9px] px-1.5 py-0.5 rounded whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
+              {port.name}
+            </div>
+          </Handle>
+        );
+      })}
 
       <div className="p-4">
         {/* Header */}
@@ -120,12 +225,37 @@ export const RoundNode: React.FC<NodeProps<RoundNodeData>> = ({ data }) => {
         </div>
       </div>
 
-      {/* Output Handle */}
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        className="!w-3 !h-3 !bg-indigo-500 !border-2 !border-white !rounded-full !shadow-lg -mb-1.5 ring-2 ring-indigo-100"
-      />
+      {/* Multiple Output Handles - Using configured output ports */}
+      {outputPorts.map((port, index) => {
+        const handleId = port.id;
+        const isUsed = usedOutputHandles.has(handleId);
+        const dataStreamsLabel = port.dataStreams.join(', ');
+
+        return (
+          <Handle
+            key={handleId}
+            type="source"
+            id={handleId}
+            position={Position.Bottom}
+            style={{
+              left: `${(index + 1) * (100 / (outputPorts.length + 1))}%`,
+            }}
+            className={`!w-3 !h-3 !border-2 !border-white !rounded-full !shadow-lg transition-all -mb-1.5
+              ${isUsed 
+                ? '!bg-indigo-500 ring-2 ring-indigo-200' 
+                : '!bg-indigo-400 hover:!bg-indigo-600 ring-1 ring-indigo-100'
+              }`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPortClick?.(handleId, 'output');
+            }}
+          >
+            <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[9px] px-1.5 py-0.5 rounded whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
+              {port.name} ({dataStreamsLabel})
+            </div>
+          </Handle>
+        );
+      })}
     </div>
   );
 };
