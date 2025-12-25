@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Category } from '../../services/demoDb';
+import { Category } from '../../services/models';
 import { Folder, Plus, MoreHorizontal, FileText } from 'lucide-react';
 
 interface TileProps {

@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { db, SocialAccount, ScheduledPost } from '../../services/demoDb';
+import { db } from '../../services/database';
+import { SocialAccount, ScheduledPost } from '../../services/models';
 import { 
   Twitter, Linkedin, Facebook, Instagram, Share2, 
   Zap, Calendar, MoreHorizontal, Check, Plus, AlertCircle,
@@ -13,8 +14,15 @@ export const ReachView: React.FC = () => {
   const [posts, setPosts] = useState<ScheduledPost[]>([]);
 
   useEffect(() => {
-    setAccounts(db.getSocialAccounts());
-    setPosts(db.getScheduledPosts());
+    const load = async () => {
+      const [a, p] = await Promise.all([
+        db.getSocialAccounts(),
+        db.getScheduledPosts(),
+      ]);
+      setAccounts(a);
+      setPosts(p);
+    };
+    load();
   }, []);
 
   const getIcon = (platform: string) => {

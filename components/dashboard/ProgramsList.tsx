@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Plus, Calendar, Users, MoreHorizontal, CheckCircle2, CircleDashed, CreditCard, DollarSign, Wallet } from 'lucide-react';
-import { db, Program, PaymentConfig } from '../../services/demoDb';
+import { db } from '../../services/database';
+import { Program, PaymentConfig } from '../../services/models';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
 
@@ -23,15 +24,23 @@ export const ProgramsList: React.FC = () => {
   });
 
   useEffect(() => {
-    setPrograms(db.getPrograms());
+    const load = async () => {
+      const data = await db.getPrograms();
+      setPrograms(data);
+    };
+    load();
   }, []);
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProgram.title || !newProgram.deadline) return;
     
-    db.addProgram(newProgram);
-    setPrograms(db.getPrograms());
+    await db.addProgram({
+      ...newProgram,
+      type: 'Award',
+      paymentConfig: { enabled: false, provider: 'Stripe', currency: 'USD', fee: 0, connected: false },
+    } as any);
+    setPrograms(await db.getPrograms());
     setIsModalOpen(false);
     setNewProgram({ title: '', category: 'General', status: 'Draft', deadline: '' });
   };
@@ -49,7 +58,7 @@ export const ProgramsList: React.FC = () => {
     setIsPaymentModalOpen(true);
   };
 
-  const savePaymentSettings = (e: React.FormEvent) => {
+  const savePaymentSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedProgram) {
        const updatedProgram = {
@@ -59,8 +68,8 @@ export const ProgramsList: React.FC = () => {
              connected: paymentConfig.enabled && paymentConfig.publicKey ? true : false
           }
        };
-       db.updateProgram(updatedProgram);
-       setPrograms(db.getPrograms());
+       await db.updateProgram(updatedProgram);
+       setPrograms(await db.getPrograms());
        setIsPaymentModalOpen(false);
     }
   };

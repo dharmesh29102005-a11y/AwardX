@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { db, Contact } from '../../services/demoDb';
+import { db } from '../../services/database';
+import { Contact } from '../../services/models';
 import { Search, Filter, MoreVertical, Mail, Tag, X, Calendar, Globe, Linkedin, MessageSquare, Info } from 'lucide-react';
 import { Button } from '../Button';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -10,7 +11,11 @@ export const CRMView: React.FC = () => {
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
 
   useEffect(() => {
-    setContacts(db.getContacts());
+    const load = async () => {
+      const data = await db.getContacts();
+      setContacts(data);
+    };
+    load();
   }, []);
 
   const getSourceIcon = (source: string) => {

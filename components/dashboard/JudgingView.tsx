@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { db, Judge } from '../../services/demoDb';
+import { db } from '../../services/database';
+import { Judge } from '../../services/models';
 import { Gavel, CheckCircle2, Clock, Mail, Plus, Settings, Sliders, Trash2 } from 'lucide-react';
 import { Button } from '../Button';
 
@@ -14,7 +15,11 @@ export const JudgingView: React.FC = () => {
   ]);
 
   useEffect(() => {
-    setJudges(db.getJudges());
+    const load = async () => {
+      const data = await db.getJudges();
+      setJudges(data);
+    };
+    load();
   }, []);
 
   const totalProgress = Math.round(judges.reduce((acc, curr) => acc + curr.progress, 0) / (judges.length || 1));

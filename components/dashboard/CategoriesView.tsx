@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { db, Category, Program } from '../../services/demoDb';
+import { db } from '../../services/database';
+import { Category, Program } from '../../services/models';
 import { Folder, ChevronRight, Plus, MoreHorizontal, FileText, Trash2, Edit2, ChevronDown, List, Workflow } from 'lucide-react';
 import { Button } from '../Button';
 import { Modal } from '../Modal';
@@ -177,10 +178,10 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({ activeEvent }) =
    const [newCategory, setNewCategory] = useState({ title: '', parentId: '' });
    const [viewMode, setViewMode] = useState<'list' | 'workflow'>('list');
 
-   const loadCategories = () => {
-      if (activeEvent) {
-         setCategories(db.getCategories(activeEvent.id));
-      }
+   const loadCategories = async () => {
+      if (!activeEvent) return;
+      const data = await db.getCategories(activeEvent.id);
+      setCategories(data);
    };
 
    useEffect(() => {
@@ -213,8 +214,7 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({ activeEvent }) =
    };
 
    const handleDelete = (categoryId: string) => {
-      db.deleteCategory(categoryId);
-      loadCategories(); // Reload to reflect changes
+      db.deleteCategory(categoryId).then(loadCategories); // Reload to reflect changes
    };
 
    const rootCategories = categories.filter(c => c.parentId === null);

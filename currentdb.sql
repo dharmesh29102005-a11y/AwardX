@@ -208,6 +208,21 @@ CREATE TABLE public.messages (
   CONSTRAINT messages_thread_id_fkey FOREIGN KEY (thread_id) REFERENCES public.message_threads(id),
   CONSTRAINT messages_sender_id_fkey FOREIGN KEY (sender_id) REFERENCES public.profiles(id)
 );
+CREATE TABLE public.organization_invites (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  organization_id uuid NOT NULL,
+  email character varying NOT NULL,
+  role_id uuid,
+  invited_by uuid,
+  status character varying DEFAULT 'pending'::character varying,
+  token uuid NOT NULL DEFAULT uuid_generate_v4() UNIQUE,
+  invited_at timestamp with time zone DEFAULT now(),
+  accepted_at timestamp with time zone,
+  CONSTRAINT organization_invites_pkey PRIMARY KEY (id),
+  CONSTRAINT organization_invites_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT organization_invites_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.roles(id),
+  CONSTRAINT organization_invites_invited_by_fkey FOREIGN KEY (invited_by) REFERENCES public.profiles(id)
+);
 CREATE TABLE public.organization_members (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   organization_id uuid,
@@ -268,9 +283,38 @@ CREATE TABLE public.profiles (
   timezone character varying DEFAULT 'UTC'::character varying,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  email character varying,
+  job_title character varying,
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
   CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id),
   CONSTRAINT profiles_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id)
+);
+CREATE TABLE public.program_form_fields (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  form_id uuid NOT NULL,
+  label character varying NOT NULL,
+  type character varying NOT NULL,
+  required boolean DEFAULT false,
+  config jsonb DEFAULT '{}'::jsonb,
+  sort_order integer DEFAULT 0,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT program_form_fields_pkey PRIMARY KEY (id),
+  CONSTRAINT program_form_fields_form_id_fkey FOREIGN KEY (form_id) REFERENCES public.program_forms(id)
+);
+CREATE TABLE public.program_forms (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  program_id uuid NOT NULL,
+  title character varying NOT NULL,
+  description text,
+  form_type character varying DEFAULT 'submission'::character varying,
+  is_active boolean DEFAULT true,
+  pages jsonb DEFAULT '[]'::jsonb,
+  theme jsonb DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT program_forms_pkey PRIMARY KEY (id),
+  CONSTRAINT program_forms_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id)
 );
 CREATE TABLE public.program_payment_configs (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -344,8 +388,22 @@ CREATE TABLE public.roles (
   color character varying DEFAULT 'bg-slate-100 text-slate-700'::character varying,
   is_system boolean DEFAULT false,
   created_at timestamp with time zone DEFAULT now(),
+  permissions ARRAY DEFAULT ARRAY[]::text[],
   CONSTRAINT roles_pkey PRIMARY KEY (id),
   CONSTRAINT roles_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id)
+);
+CREATE TABLE public.round_edges (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  program_id uuid,
+  source_round_id uuid NOT NULL,
+  target_round_id uuid NOT NULL,
+  condition jsonb DEFAULT '{"type": "always"}'::jsonb,
+  sort_order integer DEFAULT 0,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT round_edges_pkey PRIMARY KEY (id),
+  CONSTRAINT round_edges_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id),
+  CONSTRAINT round_edges_source_round_id_fkey FOREIGN KEY (source_round_id) REFERENCES public.rounds(id),
+  CONSTRAINT round_edges_target_round_id_fkey FOREIGN KEY (target_round_id) REFERENCES public.rounds(id)
 );
 CREATE TABLE public.rounds (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -494,4 +552,13 @@ CREATE TABLE public.use_cases (
   is_active boolean DEFAULT true,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT use_cases_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.user_settings (
+  user_id uuid NOT NULL,
+  notifications jsonb DEFAULT '{}'::jsonb,
+  preferences jsonb DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT user_settings_pkey PRIMARY KEY (user_id),
+  CONSTRAINT user_settings_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
 );

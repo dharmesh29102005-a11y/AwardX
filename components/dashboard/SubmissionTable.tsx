@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { MoreHorizontal, Filter, Download, Eye, Calendar, Search, ChevronDown, User, Plus, CheckSquare, Trash2, CheckCircle, XCircle, Gavel } from 'lucide-react';
-import { db, Submission, Judge } from '../../services/demoDb';
+import { db } from '../../services/database';
+import { Submission, Judge } from '../../services/models';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -31,16 +32,20 @@ export const SubmissionTable: React.FC = () => {
   const [selectedJudgesForBulk, setSelectedJudgesForBulk] = useState<string[]>([]);
 
   useEffect(() => {
-    setSubmissions(db.getSubmissions());
-    setJudges(db.getJudges());
+    const load = async () => {
+      const [subs, js] = await Promise.all([db.getSubmissions(), db.getJudges()]);
+      setSubmissions(subs);
+      setJudges(js);
+    };
+    load();
   }, []);
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSub.title || !newSub.applicant) return;
     
-    db.addSubmission(newSub);
-    setSubmissions(db.getSubmissions());
+    await db.addSubmission(newSub as any);
+    setSubmissions(await db.getSubmissions());
     setIsModalOpen(false);
     setNewSub({ title: '', applicant: '', category: 'General', status: 'Pending' });
   };
@@ -59,7 +64,7 @@ export const SubmissionTable: React.FC = () => {
     }
   };
 
-  const handleBulkAction = (action: 'Accept' | 'Reject' | 'Delete' | 'Shortlist' | 'AssignJudge') => {
+  const handleBulkAction = async (action: 'Accept' | 'Reject' | 'Delete' | 'Shortlist' | 'AssignJudge') => {
     if (selectedIds.length === 0) return;
 
     if (action === 'AssignJudge') {
@@ -69,7 +74,7 @@ export const SubmissionTable: React.FC = () => {
 
     if (action === 'Delete') {
       if (confirm(`Are you sure you want to delete ${selectedIds.length} submissions?`)) {
-        db.bulkUpdateSubmissions(selectedIds, { delete: true } as any);
+        await db.deleteSubmissions(selectedIds);
       }
     } else {
       const statusMap: any = {
@@ -77,18 +82,18 @@ export const SubmissionTable: React.FC = () => {
         'Reject': 'Rejected',
         'Shortlist': 'Shortlisted'
       };
-      db.bulkUpdateSubmissions(selectedIds, { status: statusMap[action] });
+      await db.bulkUpdateSubmissions(selectedIds, { status: statusMap[action] } as any);
     }
     
     // Refresh
-    setSubmissions(db.getSubmissions());
+    setSubmissions(await db.getSubmissions());
     setSelectedIds([]);
   };
 
-  const handleAssignJudges = () => {
+  const handleAssignJudges = async () => {
     if (selectedJudgesForBulk.length > 0 && selectedIds.length > 0) {
-      db.bulkUpdateSubmissions(selectedIds, { assignedJudges: selectedJudgesForBulk });
-      setSubmissions(db.getSubmissions());
+      await db.assignJudgesToSubmissions(selectedIds, selectedJudgesForBulk);
+      setSubmissions(await db.getSubmissions());
       setIsJudgeModalOpen(false);
       setSelectedJudgesForBulk([]);
       setSelectedIds([]);
@@ -100,7 +105,7 @@ export const SubmissionTable: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
            <h1 className="text-2xl font-bold text-slate-900">Submissions</h1>
-           <p className="text-slate-500">Manage entries from your local demo database.</p>
+           <p className="text-slate-500">Manage entries stored in Supabase.</p>
         </div>
         <div className="flex gap-2">
            <button className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 font-medium text-sm flex items-center gap-2">

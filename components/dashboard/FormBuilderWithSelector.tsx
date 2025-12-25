@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { FormField, FormPage, FormTheme } from './FormBuilder';
 import { FormPreview } from './FormPreview';
-import { db, Program } from '../../services/demoDb';
+import { db } from '../../services/database';
+import { Program } from '../../services/models';
 import { FileText, CheckCircle2 } from 'lucide-react';
 import { Button } from '../Button';
 
@@ -28,39 +29,46 @@ export const FormBuilderWithSelector: React.FC<FormBuilderWithSelectorProps> = (
     }
   }, [activeEvent]);
 
-  const loadSavedForms = () => {
+  const loadSavedForms = async () => {
     if (!activeEvent) return;
-    const forms = db.getForms(activeEvent.id);
-    setSavedForms(forms);
+    const forms = await db.getForms(activeEvent.id);
+    const enriched = await Promise.all(
+      (forms as any[]).map(async (f: any) => {
+        const fields = await db.getFormFields(f.id);
+        return { ...f, fieldCount: (fields as any[])?.length || 0 };
+      })
+    );
+    setSavedForms(enriched);
   };
 
-  const loadForm = (formId: string) => {
-    const fields = db.getFormFields(formId);
-    const formFields: FormField[] = fields.map((f: any) => ({
-      id: f.id,
-      type: f.fieldType,
-      label: f.label,
-      placeholder: f.placeholder || undefined,
-      required: f.isRequired,
-      options: f.options || undefined,
-      pageId: f.pageId || 'page-1',
-      validation: f.validationRules || undefined,
-    }));
+  const loadForm = async (formId: string) => {
+    const fields = await db.getFormFields(formId);
+    const formFields: FormField[] = (fields as any[]).map((f: any) => {
+      const cfg = f.config || {};
+      return {
+        id: f.id,
+        type: f.type,
+        label: f.label,
+        placeholder: cfg.placeholder || undefined,
+        required: !!f.required,
+        options: cfg.options || undefined,
+        pageId: cfg.pageId || 'page-1',
+        validation: cfg.validation || undefined,
+      };
+    });
 
-    // Load form metadata to get pages and theme
-    const form = db.getFormById(formId);
+    const form = (savedForms as any[]).find(f => f.id === formId);
 
     setCurrentFormFields(formFields);
     setCurrentPages(form?.pages || []);
     setCurrentTheme(form?.theme);
     setSelectedFormId(formId);
-    if (onFormSelect) {
-      onFormSelect(formId);
-    }
+    if (onFormSelect) onFormSelect(formId);
+    if (activeEvent) localStorage.setItem(`selected_form_${activeEvent.id}`, formId);
   };
 
   const handleFormSelect = (formId: string) => {
-    loadForm(formId);
+    void loadForm(formId);
   };
 
 
@@ -90,7 +98,7 @@ export const FormBuilderWithSelector: React.FC<FormBuilderWithSelectorProps> = (
         ) : (
           <div className="space-y-2">
             {savedForms.map((form) => {
-              const fields = db.getFormFields(form.id);
+              const fieldsCount = typeof (form as any)?.fieldCount === 'number' ? (form as any).fieldCount : undefined;
               const isSelected = selectedFormId === form.id;
 
               return (
@@ -111,7 +119,7 @@ export const FormBuilderWithSelector: React.FC<FormBuilderWithSelectorProps> = (
                         )}
                       </div>
                       <p className="text-xs text-slate-500">
-                        {fields.length} field{fields.length !== 1 ? 's' : ''}
+                        {typeof fieldsCount === 'number' ? `${fieldsCount} field${fieldsCount !== 1 ? 's' : ''}` : 'Fields'}
                       </p>
                       {form.description && (
                         <p className="text-xs text-slate-400 mt-1 line-clamp-2">{form.description}</p>

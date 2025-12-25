@@ -19,7 +19,7 @@ import { SubmissionProcessView } from './SubmissionProcessView'; // Import new v
 import { ProgramDetailsView } from './ProgramDetailsView';
 import { ScheduleRoundsView } from './scheduleRounds/ScheduleRoundsView';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Program } from '../../services/demoDb';
+import { Program } from '../../services/models';
 import { db as databaseService } from '../../services/database';
 
 interface DashboardProps {

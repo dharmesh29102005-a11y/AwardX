@@ -8,7 +8,7 @@ import {
   UserCog, Edit, Workflow
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Program, Category, db, PERMISSIONS, Contact } from '../../services/demoDb';
+import { Program, Category, PERMISSIONS, Contact } from '../../services/models';
 import { db as databaseService } from '../../services/database';
 import { auth } from '../../services/supabase';
 import { Modal } from '../Modal';
@@ -161,11 +161,14 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     joinedDate: new Date().toISOString().split('T')[0],
   });
   const [allUsers, setAllUsers] = useState<Contact[]>([]);
+  const [permissionsReady, setPermissionsReady] = useState(false);
 
   useEffect(() => {
     // Fetch real user data from Supabase
     const fetchUserData = async () => {
       try {
+        await databaseService.initialize();
+        setPermissionsReady(true);
         const realUser = await databaseService.getCurrentUser();
         if (realUser) {
           setCurrentUser(realUser);
@@ -213,17 +216,21 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     };
 
     fetchUserData();
-    setAllUsers(db.getContacts().filter(c => c.role !== 'Applicant')); // For quick switch
-    if (activeEvent) {
-      setCategories(db.getCategories(activeEvent.id));
-    }
+
+    const fetchCategories = async () => {
+      if (!activeEvent) return;
+      const cats = await databaseService.getCategories(activeEvent.id);
+      setCategories(cats);
+    };
+
+    fetchCategories();
   }, [activeEvent, isCategoryModalOpen]);
 
-  const handleAddCategory = (e: React.FormEvent) => {
+  const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeEvent || !newCategoryName) return;
 
-    db.addCategory({
+    await databaseService.addCategory({
       title: newCategoryName,
       programId: activeEvent.id,
       parentId: parentForModal
@@ -261,15 +268,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     { id: 'settings', label: 'Settings', icon: Settings, permission: PERMISSIONS.MANAGE_SETTINGS },
   ];
 
-  const filterNav = (items: any[]) => items.filter(item => db.hasPermission(item.permission));
+  const filterNav = (items: any[]) => items.filter(item => databaseService.hasPermission(item.permission));
 
   const visibleLeftNav = filterNav(leftNavItems);
   const visibleRightNav = filterNav(rightNavItems);
   const rootCategories = categories.filter(c => c.parentId === null);
 
-  const handleUserSwitch = (userId: string) => {
-    db.setCurrentUser(userId);
-    window.location.reload(); // Simple reload to refresh all permissions
+  // Demo-only user switching was removed for Supabase-backed auth.
+  const handleUserSwitch = (_userId: string) => {
+    // no-op
   };
 
   return (

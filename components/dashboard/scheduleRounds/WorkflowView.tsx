@@ -451,7 +451,6 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
           }
         }}
         onPaneClick={onPaneClick}
-        onPaneClick={onPaneClick}
         onMove={(_, viewport) => {
           setOffset({ x: viewport.x, y: viewport.y });
           setScale(viewport.zoom);

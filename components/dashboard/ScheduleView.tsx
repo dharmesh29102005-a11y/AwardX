@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { db, Round, Program } from '../../services/demoDb';
+import { db } from '../../services/database';
+import { Round, Program } from '../../services/models';
 import { 
   CalendarClock, Plus, Edit2, Trash2, Calendar, 
   ArrowRight, CheckCircle2, Circle, MoreHorizontal 
@@ -101,16 +102,19 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ activeEvent }) => {
   });
 
   useEffect(() => {
-    if (activeEvent) {
-      setRounds(db.getRounds(activeEvent.id));
-    }
+    const load = async () => {
+      if (!activeEvent) return;
+      const data = await db.getRounds(activeEvent.id);
+      setRounds(data);
+    };
+    load();
   }, [activeEvent]);
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeEvent || !newRound.title || !newRound.startDate) return;
 
-    db.addRound({
+    await db.addRound({
       programId: activeEvent.id,
       title: newRound.title!,
       type: newRound.type as any,
@@ -120,7 +124,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ activeEvent }) => {
       description: newRound.description
     });
 
-    setRounds(db.getRounds(activeEvent.id));
+    setRounds(await db.getRounds(activeEvent.id));
     setIsModalOpen(false);
     setNewRound({ title: '', type: 'Submission', status: 'Upcoming', startDate: '', endDate: '', description: '' });
   };

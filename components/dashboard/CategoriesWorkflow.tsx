@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Category } from '../../services/demoDb';
+import { Category } from '../../services/models';
 import { ZoomIn, ZoomOut, X } from 'lucide-react';
 
 interface WorkflowProps {

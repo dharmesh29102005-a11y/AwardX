@@ -5,7 +5,7 @@ import {
    Store, Briefcase, Sparkles, Calendar, ArrowRight,
    LogOut, Bell, Search, RefreshCw
 } from 'lucide-react';
-import { Program, EventType } from '../../services/demoDb';
+import { Program, EventType } from '../../services/models';
 import { auth } from '../../services/supabase';
 import { db as databaseService } from '../../services/database';
 import { Modal } from '../Modal';

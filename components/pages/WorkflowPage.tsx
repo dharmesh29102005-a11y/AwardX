@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CategoriesWorkflow } from '../dashboard/CategoriesWorkflow';
-import { db, Category, Program } from '../../services/demoDb';
+import { db } from '../../services/database';
+import { Category, Program } from '../../services/models';
 
 export const WorkflowPage: React.FC = () => {
     const [categories, setCategories] = useState<Category[]>([]);
@@ -9,22 +10,30 @@ export const WorkflowPage: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        // Get program ID from URL parameters
-        const urlParams = new URLSearchParams(window.location.search);
-        const id = urlParams.get('programId') || urlParams.get('id');
-        setProgramId(id);
-        
-        if (id) {
-            // Load program
-            const programs = db.getPrograms();
-            const foundProgram = programs.find(p => p.id === id);
-            setProgram(foundProgram || null);
+        const run = async () => {
+            // Get program ID from URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const id = urlParams.get('programId') || urlParams.get('id');
+            setProgramId(id);
 
-            // Load categories
-            const loadedCategories = db.getCategories(id);
-            setCategories(loadedCategories);
-        }
-        setIsLoading(false);
+            if (!id) {
+                setIsLoading(false);
+                return;
+            }
+
+            try {
+                const [programs, loadedCategories] = await Promise.all([
+                    db.getPrograms(),
+                    db.getCategories(id),
+                ]);
+                const foundProgram = programs.find(p => p.id === id);
+                setProgram(foundProgram || null);
+                setCategories(loadedCategories);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        run();
     }, []);
 
     const handleAddSub = (parentId: string) => {

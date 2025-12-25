@@ -1,9 +1,50 @@
-// Database service adapter that provides the same interface as demoDb but uses Supabase
-import { supabase, organizations, programs as supabasePrograms, auth, submissions, judges, contacts, roles } from './supabase';
-import { Program, Category, Round, Submission, Judge, Contact, Role } from './demoDb';
+// Database service adapter that provides a convenient UI-facing API on top of Supabase.
+import {
+  supabase,
+  organizations,
+  programs as supabasePrograms,
+  auth,
+  submissions,
+  judges,
+  contacts,
+  roles,
+  messages,
+  auditLogs,
+  socialAccounts,
+  scheduledPosts,
+  team,
+  settings,
+  forms,
+} from './supabase';
+import { Program, Category, Round, Submission, Judge, Contact, Role, Message, Log, SocialAccount, ScheduledPost, TeamMember } from './models';
 
 class DatabaseService {
   private currentOrgId: string | null = null;
+  private cachedPermissions: Set<string> | null = null;
+  private cachedRoleName: string | null = null;
+
+  private async safeAuditLog(event: {
+    action: string;
+    actionType: 'create' | 'update' | 'delete' | 'warning' | 'access';
+    resourceType?: string;
+    resourceId?: string;
+    details?: string;
+    metadata?: Record<string, any>;
+  }) {
+    try {
+      await auditLogs.logEvent({
+        action: event.action,
+        actionType: event.actionType,
+        resourceType: event.resourceType,
+        resourceId: event.resourceId,
+        details: event.details,
+        metadata: event.metadata,
+      });
+    } catch (e) {
+      // Don't break primary flows if audit logging fails, but surface it.
+      console.warn('Audit log failed:', e);
+    }
+  }
 
   // Initialize and get current organization
   async initialize() {
@@ -12,6 +53,7 @@ class DatabaseService {
       const { data: org, error } = await organizations.getCurrent();
       if (org && org.id) {
         this.currentOrgId = org.id;
+        await this.refreshPermissionCache();
         return { org, error: null };
       }
       
@@ -65,6 +107,45 @@ class DatabaseService {
     if (org?.id) {
       this.currentOrgId = org.id;
     }
+    await this.refreshPermissionCache();
+  }
+
+  private async refreshPermissionCache() {
+    this.cachedPermissions = null;
+    this.cachedRoleName = null;
+    if (!supabase) return;
+
+    const { user } = await auth.getUser();
+    if (!user) return;
+
+    if (!this.currentOrgId) {
+      const { data: org } = await organizations.getCurrent();
+      if (org?.id) this.currentOrgId = org.id;
+    }
+    if (!this.currentOrgId) return;
+
+    // Find membership
+    const { data: member } = await supabase
+      .from('organization_members')
+      .select('role_id')
+      .eq('organization_id', this.currentOrgId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (!member?.role_id) return;
+
+    // Fetch role permissions keys
+    const { data: roleRow } = await supabase
+      .from('roles')
+      .select('id, name, role_permissions(permission_id, permissions(key))')
+      .eq('id', member.role_id)
+      .maybeSingle();
+
+    const permKeys: string[] =
+      (roleRow as any)?.role_permissions?.map((rp: any) => rp?.permissions?.key).filter(Boolean) || [];
+
+    this.cachedRoleName = (roleRow as any)?.name || null;
+    this.cachedPermissions = new Set(permKeys);
   }
 
   // Convert Supabase program to demo format
@@ -79,10 +160,16 @@ class DatabaseService {
       entriesCount: program.entries_count || 0,
       paymentConfig: program.program_payment_configs ? {
         enabled: program.program_payment_configs.enabled || false,
-        provider: program.program_payment_configs.provider || 'Stripe',
+        provider: (() => {
+          const p = String(program.program_payment_configs.provider || 'stripe').toLowerCase();
+          if (p === 'paypal') return 'PayPal';
+          if (p === 'razorpay') return 'Razorpay';
+          return 'Stripe';
+        })(),
         currency: program.program_payment_configs.currency || 'USD',
         fee: Number(program.program_payment_configs.fee_amount) || 0,
         connected: program.program_payment_configs.connected || false,
+        publicKey: program.program_payment_configs.public_key || undefined,
       } : undefined,
       description: program.description,
       slug: program.slug,
@@ -151,7 +238,16 @@ class DatabaseService {
       throw new Error('Failed to create program: No data returned');
     }
     
-    return this.mapProgram(data);
+    const created = this.mapProgram(data);
+    await this.safeAuditLog({
+      action: 'Created program',
+      actionType: 'create',
+      resourceType: 'program',
+      resourceId: created.id,
+      details: created.title,
+      metadata: { title: created.title },
+    });
+    return created;
   }
 
   async updateProgram(program: Program) {
@@ -172,7 +268,36 @@ class DatabaseService {
     if (!data) {
       throw new Error('Failed to update program: No data returned');
     }
-    return this.mapProgram(data);
+
+    // Upsert payment config if provided
+    if (supabase && program.paymentConfig) {
+      const pc = program.paymentConfig;
+      const { error: pcError } = await supabase
+        .from('program_payment_configs')
+        .upsert({
+          program_id: program.id,
+          enabled: !!pc.enabled,
+          provider: (pc.provider || 'Stripe').toLowerCase(),
+          currency: pc.currency || 'USD',
+          fee_amount: Number(pc.fee) || 0,
+          public_key: pc.publicKey || null,
+          connected: !!pc.connected,
+        }, { onConflict: 'program_id' });
+      if (pcError) {
+        throw new Error(pcError.message || 'Failed to update payment configuration');
+      }
+    }
+
+    const updated = this.mapProgram(data);
+    await this.safeAuditLog({
+      action: 'Updated program',
+      actionType: 'update',
+      resourceType: 'program',
+      resourceId: updated.id,
+      details: updated.title,
+      metadata: { title: updated.title },
+    });
+    return updated;
   }
 
   // Categories
@@ -204,13 +329,22 @@ class DatabaseService {
 
     if (error || !data) throw new Error(error?.message || 'Failed to create category');
 
-    return {
+    const created = {
       id: data.id,
       title: data.title,
       programId: data.program_id,
       parentId: data.parent_id,
       entriesCount: data.entries_count || 0,
     };
+    await this.safeAuditLog({
+      action: 'Created category',
+      actionType: 'create',
+      resourceType: 'category',
+      resourceId: created.id,
+      details: created.title,
+      metadata: { title: created.title, programId: created.programId, parentId: created.parentId },
+    });
+    return created;
   }
 
   // Rounds
@@ -265,7 +399,7 @@ class DatabaseService {
 
     if (error || !data) throw new Error(error?.message || 'Failed to create round');
 
-    return {
+    const created = {
       id: data.id,
       programId: data.program_id,
       title: data.title,
@@ -275,6 +409,15 @@ class DatabaseService {
       status: this.mapRoundStatus(data.status) as Round['status'],
       description: data.description,
     };
+    await this.safeAuditLog({
+      action: 'Created round',
+      actionType: 'create',
+      resourceType: 'round',
+      resourceId: created.id,
+      details: created.title,
+      metadata: { title: created.title, programId: created.programId, type: created.type },
+    });
+    return created;
   }
 
   // Submissions
@@ -313,8 +456,8 @@ class DatabaseService {
 
     // Need to find program and category IDs
     const programs = await this.getPrograms();
-    const program = programs.find(p => p.title === submission.category || p.id);
-    if (!program) throw new Error('Program not found');
+    const program = programs[0];
+    if (!program) throw new Error('No programs found. Create a program first.');
 
     const categories = await this.getCategories(program.id);
     const category = categories.find(c => c.title === submission.category);
@@ -334,7 +477,7 @@ class DatabaseService {
 
     if (error || !data) throw new Error(error?.message || 'Failed to create submission');
 
-    return {
+    const created: Submission = {
       id: data.id,
       title: data.title,
       applicant: data.applicant_name || 'Unknown',
@@ -345,6 +488,15 @@ class DatabaseService {
       image: `https://source.unsplash.com/random/50x50?${data.id}`,
       assignedJudges: [],
     };
+    await this.safeAuditLog({
+      action: 'Created submission',
+      actionType: 'create',
+      resourceType: 'submission',
+      resourceId: created.id,
+      details: created.title,
+      metadata: { title: created.title, programId: program.id, category: created.category, applicant: created.applicant },
+    });
+    return created;
   }
 
   async bulkUpdateSubmissions(ids: string[], updates: Partial<Submission>) {
@@ -369,6 +521,44 @@ class DatabaseService {
       .in('id', ids);
 
     if (error) throw new Error(error.message);
+
+    if (updates.status) {
+      await this.safeAuditLog({
+        action: 'Updated submission status (bulk)',
+        actionType: 'update',
+        resourceType: 'submission',
+        details: `${ids.length} submissions -> ${updates.status}`,
+        metadata: { ids, status: updates.status },
+      });
+    }
+  }
+
+  async deleteSubmissions(ids: string[]) {
+    for (const id of ids) {
+      const { error } = await submissions.delete(id);
+      if (error) throw new Error(error.message || 'Failed to delete submission');
+    }
+    await this.safeAuditLog({
+      action: 'Deleted submissions (bulk)',
+      actionType: 'delete',
+      resourceType: 'submission',
+      details: `${ids.length} submissions`,
+      metadata: { ids },
+    });
+  }
+
+  async assignJudgesToSubmissions(submissionIds: string[], judgeIds: string[]) {
+    for (const submissionId of submissionIds) {
+      const { error } = await submissions.assignJudges(submissionId, judgeIds);
+      if (error) throw new Error(error.message || 'Failed to assign judges');
+    }
+    await this.safeAuditLog({
+      action: 'Assigned judges to submissions (bulk)',
+      actionType: 'update',
+      resourceType: 'submission',
+      details: `${submissionIds.length} submissions; ${judgeIds.length} judges`,
+      metadata: { submissionIds, judgeIds },
+    });
   }
 
   // Judges
@@ -427,7 +617,7 @@ class DatabaseService {
 
     if (error || !data) throw new Error(error?.message || 'Failed to create contact');
 
-    return {
+    const created: Contact = {
       id: data.id,
       name: data.name,
       email: data.email,
@@ -439,6 +629,14 @@ class DatabaseService {
       surveyAnswer: '',
       joinedDate: new Date().toISOString().split('T')[0],
     };
+    await this.safeAuditLog({
+      action: 'Created contact',
+      actionType: 'create',
+      resourceType: 'contact',
+      resourceId: created.id,
+      details: `${created.name} (${created.email})`,
+    });
+    return created;
   }
 
   // Roles
@@ -453,6 +651,287 @@ class DatabaseService {
       usersCount: 0, // Would need to count organization_members
       color: r.color || 'bg-slate-100 text-slate-700',
     }));
+  }
+
+  async createRole(role: { name: string; permissions: string[]; color?: string }) {
+    const { data, error } = await roles.create(role);
+    if (error) throw new Error(error.message || 'Failed to create role');
+    await this.safeAuditLog({
+      action: 'Created role',
+      actionType: 'create',
+      resourceType: 'role',
+      resourceId: (data as any)?.id,
+      details: role.name,
+      metadata: { name: role.name, permissions: role.permissions },
+    });
+    return data;
+  }
+
+  async updateRole(role: { id: string; name?: string; color?: string; permissions?: string[] }) {
+    if (!role.id) throw new Error('Role id is required');
+
+    if (role.name || role.color) {
+      const { error } = await roles.update(role.id, { name: role.name, color: role.color } as any);
+      if (error) throw new Error(error.message || 'Failed to update role');
+    }
+
+    if (role.permissions) {
+      await this.updateRolePermissions(role.id, role.permissions);
+    }
+
+    await this.safeAuditLog({
+      action: 'Updated role',
+      actionType: 'update',
+      resourceType: 'role',
+      resourceId: role.id,
+      details: role.name || role.id,
+      metadata: { name: role.name, permissionsCount: role.permissions?.length },
+    });
+  }
+
+  async updateRolePermissions(roleId: string, permissionKeys: string[]) {
+    const { error } = await roles.updatePermissions(roleId, permissionKeys);
+    if (error) throw new Error(error.message || 'Failed to update role permissions');
+  }
+
+  async deleteRole(roleId: string) {
+    const { error } = await roles.delete(roleId);
+    if (error) throw new Error(error.message || 'Failed to delete role');
+    await this.safeAuditLog({
+      action: 'Deleted role',
+      actionType: 'delete',
+      resourceType: 'role',
+      resourceId: roleId,
+    });
+  }
+
+  // Team members (organization_members)
+  async getTeamMembers(): Promise<TeamMember[]> {
+    const { data, error } = await team.getMembers();
+    if (error || !data) return [];
+
+    return (data as any[]).map((m: any) => {
+      const profile = m.profiles || {};
+      const role = m.roles || {};
+      return {
+        memberId: m.id,
+        userId: profile.id || m.user_id,
+        name: profile.full_name || 'User',
+        email: profile.email || '',
+        role: role.name || 'Member',
+        status: (m.status === 'active' ? 'Active' : 'Inactive') as TeamMember['status'],
+        lastActive: profile.updated_at ? new Date(profile.updated_at).toLocaleDateString() : '—',
+        avatar: profile.avatar_url || `https://i.pravatar.cc/150?u=${profile.id || m.user_id}`,
+        joinedDate: m.joined_at ? new Date(m.joined_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      };
+    });
+  }
+
+  async updateTeamMemberRole(memberId: string, roleId: string) {
+    const { error } = await team.updateMemberRole(memberId, roleId);
+    if (error) throw new Error(error.message || 'Failed to update member role');
+    await this.safeAuditLog({
+      action: 'Updated team member role',
+      actionType: 'update',
+      resourceType: 'organization_member',
+      resourceId: memberId,
+      metadata: { roleId },
+    });
+  }
+
+  async addTeamMemberByEmail(email: string, roleId: string) {
+    const { error } = await team.addMemberByEmail(email, roleId);
+    if (error) throw new Error(error.message || 'Failed to add team member');
+    await this.safeAuditLog({
+      action: 'Added team member',
+      actionType: 'create',
+      resourceType: 'organization_member',
+      details: email,
+      metadata: { email, roleId },
+    });
+  }
+
+  // Messages
+  async getMessageThreads() {
+    const { data, error } = await messages.getThreads();
+    if (error || !data) return [];
+    return data;
+  }
+
+  async getMessagesByThread(threadId: string) {
+    const { data, error } = await messages.getByThread(threadId);
+    if (error || !data) return [];
+    return data;
+  }
+
+  async sendMessage(threadId: string, content: string) {
+    const { data, error } = await messages.send(threadId, content);
+    if (error) throw new Error(error.message || 'Failed to send message');
+    await this.safeAuditLog({
+      action: 'Sent message',
+      actionType: 'create',
+      resourceType: 'message',
+      resourceId: (data as any)?.id,
+      details: `thread:${threadId}`,
+      metadata: { threadId },
+    });
+    return data;
+  }
+
+  // Audit logs
+  async getLogs(): Promise<Log[]> {
+    const { data, error } = await auditLogs.getAll({ limit: 100 });
+    if (error || !data) return [];
+
+    return (data as any[]).map((l: any) => ({
+      id: l.id,
+      action: l.action,
+      user: l.user_name || 'User',
+      userAvatar: l.user_avatar || `https://i.pravatar.cc/150?u=${l.user_id || l.id}`,
+      details: l.details || '',
+      timestamp: l.created_at ? new Date(l.created_at).toLocaleString() : '',
+      type: (l.action_type === 'delete' ? 'delete' : l.action_type === 'warning' ? 'warning' : l.action_type === 'create' ? 'create' : 'update') as Log['type'],
+    }));
+  }
+
+  // Reach
+  async getSocialAccounts(): Promise<SocialAccount[]> {
+    const { data, error } = await socialAccounts.getAll();
+    if (error || !data) return [];
+
+    return (data as any[]).map((a: any) => ({
+      id: a.id,
+      platform: a.platform,
+      handle: a.handle,
+      status: a.status === 'connected' ? 'Connected' : 'Disconnected',
+      avatar: a.avatar_url || `https://i.pravatar.cc/150?u=${a.handle}`,
+    }));
+  }
+
+  async getScheduledPosts(): Promise<ScheduledPost[]> {
+    const { data, error } = await scheduledPosts.getAll();
+    if (error || !data) return [];
+
+    return (data as any[]).map((p: any) => ({
+      id: p.id,
+      content: p.content,
+      image: p.image_url || undefined,
+      platforms: p.platforms || [],
+      scheduledFor: p.scheduled_for,
+      trigger: (p.trigger_type || 'Manual') as ScheduledPost['trigger'],
+      status: (p.status === 'posted' ? 'Posted' : p.status === 'draft' ? 'Draft' : 'Scheduled') as ScheduledPost['status'],
+    }));
+  }
+
+  // Settings
+  async getProfile() {
+    return settings.getProfile();
+  }
+
+  async updateProfile(updates: any) {
+    const res = await settings.updateProfile(updates);
+    if (!(res as any)?.error) {
+      await this.safeAuditLog({
+        action: 'Updated profile',
+        actionType: 'update',
+        resourceType: 'profile',
+      });
+    }
+    return res;
+  }
+
+  async getOrganization() {
+    return settings.getOrganization();
+  }
+
+  async updateOrganization(updates: any) {
+    const res = await settings.updateOrganization(updates);
+    if (!(res as any)?.error) {
+      await this.safeAuditLog({
+        action: 'Updated organization settings',
+        actionType: 'update',
+        resourceType: 'organization',
+      });
+    }
+    return res;
+  }
+
+  async getUserSettings() {
+    return settings.getUserSettings();
+  }
+
+  async updateUserSettings(updates: any) {
+    const res = await settings.updateUserSettings(updates);
+    if (!(res as any)?.error) {
+      await this.safeAuditLog({
+        action: 'Updated user settings',
+        actionType: 'update',
+        resourceType: 'user_settings',
+      });
+    }
+    return res;
+  }
+
+  // Forms
+  async getForms(programId: string) {
+    const { data, error } = await forms.getByProgram(programId);
+    if (error || !data) return [];
+    return data;
+  }
+
+  async getFormFields(formId: string) {
+    const { data, error } = await forms.getFields(formId);
+    if (error || !data) return [];
+    return data;
+  }
+
+  async createForm(payload: { program_id: string; title: string; description?: string; is_active?: boolean }) {
+    const { data, error } = await forms.create(payload);
+    if (error) throw new Error(error.message || 'Failed to create form');
+    await this.safeAuditLog({
+      action: 'Created form',
+      actionType: 'create',
+      resourceType: 'program_form',
+      resourceId: (data as any)?.id,
+      details: payload.title,
+      metadata: { programId: payload.program_id },
+    });
+    return data;
+  }
+
+  async updateForm(id: string, updates: any) {
+    const { data, error } = await forms.update(id, updates);
+    if (error) throw new Error(error.message || 'Failed to update form');
+    await this.safeAuditLog({
+      action: 'Updated form',
+      actionType: 'update',
+      resourceType: 'program_form',
+      resourceId: id,
+    });
+    return data;
+  }
+
+  async deleteForm(id: string) {
+    const { error } = await forms.delete(id);
+    if (error) throw new Error(error.message || 'Failed to delete form');
+    await this.safeAuditLog({
+      action: 'Deleted form',
+      actionType: 'delete',
+      resourceType: 'program_form',
+      resourceId: id,
+    });
+  }
+
+  async replaceFormFields(formId: string, fieldsPayload: any[]) {
+    const { error } = await forms.replaceFields(formId, fieldsPayload);
+    if (error) throw new Error(error.message || 'Failed to save form fields');
+    await this.safeAuditLog({
+      action: 'Updated form fields',
+      actionType: 'update',
+      resourceType: 'program_form',
+      resourceId: formId,
+      metadata: { fieldsCount: fieldsPayload?.length || 0 },
+    });
   }
 
   // Stats
@@ -509,8 +988,21 @@ class DatabaseService {
   }
 
   hasPermission(permission: string): boolean {
-    // Simplified - would need to check user's role and permissions
-    return true; // For now, allow all
+    // Fail-open so the UI doesn't go blank if permissions haven't been seeded/configured yet.
+    // Once permissions are present, this will correctly enforce them.
+    const roleName = (this.cachedRoleName || '').toLowerCase();
+    if (roleName === 'admin' || roleName === 'owner' || roleName === 'superadmin') return true;
+
+    // If we haven't loaded permissions (or user isn't in organization_members yet),
+    // don't hard-block navigation.
+    if (!this.cachedPermissions) return true;
+
+    // If permissions exist but are empty (common right after schema setup),
+    // allow access until permissions are assigned.
+    if (this.cachedPermissions.size === 0) return true;
+
+    if (this.cachedPermissions.has('all')) return true;
+    return this.cachedPermissions.has(permission);
   }
 }
 

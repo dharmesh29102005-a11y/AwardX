@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { FormBuilder, FormField, FormPage, FormTheme, FormBuilderRef } from './FormBuilder';
-import { db, Program } from '../../services/demoDb';
+import { db } from '../../services/database';
+import { Program } from '../../services/models';
 import { Save, FileText, Plus, Trash2 } from 'lucide-react';
 import { Button } from '../Button';
 import { Modal } from '../Modal';
@@ -19,6 +20,33 @@ interface SavedForm {
   theme?: FormTheme;
   createdAt: string;
 }
+
+const mapDbFieldToFormField = (f: any): FormField => {
+  const cfg = f.config || {};
+  return {
+    id: f.id,
+    type: f.type,
+    label: f.label,
+    placeholder: cfg.placeholder || undefined,
+    required: !!f.required,
+    options: cfg.options || undefined,
+    pageId: cfg.pageId || 'page-1',
+    validation: cfg.validation || undefined,
+  };
+};
+
+const mapFormFieldToDbPayload = (f: FormField, idx: number) => ({
+  label: f.label,
+  type: f.type,
+  required: !!f.required,
+  config: {
+    placeholder: f.placeholder,
+    options: f.options,
+    pageId: f.pageId,
+    validation: f.validation,
+  },
+  sort_order: idx,
+});
 
 export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent }) => {
   const [savedForms, setSavedForms] = useState<SavedForm[]>([]);
@@ -41,31 +69,23 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
     loadSavedForms();
   }, [activeEvent]);
 
-  const loadSavedForms = () => {
+  const loadSavedForms = async () => {
     if (!activeEvent) return;
-    const forms = db.getForms(activeEvent.id);
-    const formsWithFields = forms.map(form => {
-      const fields = db.getFormFields(form.id);
-
-      return {
-        id: form.id,
-        name: form.name,
-        programId: form.programId,
-        fields: fields.map((f: any) => ({
-          id: f.id,
-          type: f.fieldType,
-          label: f.label,
-          placeholder: f.placeholder || undefined,
-          required: f.isRequired,
-          options: f.options || undefined,
-          pageId: f.pageId || 'page-1',
-          validation: f.validationRules || undefined,
-        })),
-        pages: form.pages || undefined,
-        theme: form.theme || undefined,
-        createdAt: form.createdAt || form.updatedAt,
-      };
-    });
+    const forms = await db.getForms(activeEvent.id);
+    const formsWithFields: SavedForm[] = await Promise.all(
+      (forms as any[]).map(async (form: any) => {
+        const fields = await db.getFormFields(form.id);
+        return {
+          id: form.id,
+          name: form.title,
+          programId: form.program_id,
+          fields: (fields as any[]).map(mapDbFieldToFormField),
+          pages: form.pages || undefined,
+          theme: form.theme || undefined,
+          createdAt: form.created_at || form.updated_at || new Date().toISOString(),
+        };
+      })
+    );
     setSavedForms(formsWithFields);
   };
 
@@ -76,47 +96,34 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
 
     if (selectedFormId) {
       // Update existing form
-      db.saveFormFields(selectedFormId, fields);
-      const form = db.getFormById(selectedFormId);
-      if (form) {
-        db.saveForm({
-          id: form.id,
-          programId: form.programId,
-          name: form.name,
-          description: form.description,
-          formType: form.formType,
-          isActive: form.isActive,
-          pages,
-          theme,
-        });
-      }
-      loadSavedForms();
+      void (async () => {
+        await db.updateForm(selectedFormId, { pages, theme });
+        await db.replaceFormFields(selectedFormId, fields.map(mapFormFieldToDbPayload));
+        await loadSavedForms();
+      })();
     } else {
       // New form - open modal to get name
       setIsSaveModalOpen(true);
     }
   };
 
-  const handleSaveNewForm = () => {
+  const handleSaveNewForm = async () => {
     if (!activeEvent || !formName.trim()) return;
 
-    const newForm = db.saveForm({
-      programId: activeEvent.id,
-      name: formName,
+    const newForm = await db.createForm({
+      program_id: activeEvent.id,
+      title: formName,
       description: '',
-      formType: 'submission',
-      isActive: true,
-      pages: currentPages,
-      theme: currentTheme,
+      is_active: true,
     });
 
-    // Save form fields
-    db.saveFormFields(newForm.id, currentForm);
+    await db.updateForm((newForm as any).id, { pages: currentPages, theme: currentTheme });
+    await db.replaceFormFields((newForm as any).id, currentForm.map(mapFormFieldToDbPayload));
 
     setFormName('');
     setIsSaveModalOpen(false);
-    setSelectedFormId(newForm.id);
-    loadSavedForms();
+    setSelectedFormId((newForm as any).id);
+    await loadSavedForms();
   };
 
   const handleLoadForm = (form: SavedForm) => {
@@ -132,57 +139,29 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
   const handleDeleteForm = (formId: string) => {
     if (!window.confirm('Are you sure you want to delete this form?')) return;
 
-    db.deleteForm(formId);
+    void (async () => {
+      await db.deleteForm(formId);
 
-    if (selectedFormId === formId) {
-      setSelectedFormId(null);
-      setCurrentForm([]);
-    }
-    loadSavedForms();
+      if (selectedFormId === formId) {
+        setSelectedFormId(null);
+        setCurrentForm([]);
+      }
+      await loadSavedForms();
+    })();
   };
 
   const handleNewForm = () => {
     // Save current form if there are unsaved changes
     if (formBuilderRef.current) {
       const currentData = formBuilderRef.current.getCurrentFormData();
-      
-      // Check if there's actual form data to save (has fields or custom pages/theme)
       const hasFormData = currentData.fields.length > 0;
-      
-      if (hasFormData) {
-        if (selectedFormId) {
-          // Editing existing form - auto-save it
-          db.saveFormFields(selectedFormId, currentData.fields);
-          const form = db.getFormById(selectedFormId);
-          if (form) {
-            db.saveForm({
-              id: form.id,
-              programId: form.programId,
-              name: form.name,
-              description: form.description,
-              formType: form.formType,
-              isActive: form.isActive,
-              pages: currentData.pages,
-              theme: currentData.theme,
-            });
-          }
-          loadSavedForms();
-        } else if (isCreatingNew) {
-          // New unsaved form - auto-save with default name
-          if (!activeEvent) return;
-          const defaultName = `Untitled Form ${new Date().toLocaleDateString()}`;
-          const newForm = db.saveForm({
-            programId: activeEvent.id,
-            name: defaultName,
-            description: '',
-            formType: 'submission',
-            isActive: true,
-            pages: currentData.pages,
-            theme: currentData.theme,
-          });
-          db.saveFormFields(newForm.id, currentData.fields);
-          loadSavedForms();
-        }
+
+      if (hasFormData && selectedFormId) {
+        void (async () => {
+          await db.updateForm(selectedFormId, { pages: currentData.pages, theme: currentData.theme });
+          await db.replaceFormFields(selectedFormId, currentData.fields.map(mapFormFieldToDbPayload));
+          await loadSavedForms();
+        })();
       }
     }
     

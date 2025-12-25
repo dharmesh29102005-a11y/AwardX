@@ -1,6 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { db, Contact, Role, PERMISSIONS } from '../../services/demoDb';
+import { db } from '../../services/database';
+import { PERMISSIONS, Role, TeamMember } from '../../services/models';
+import { auth } from '../../services/supabase';
 import { Plus, UserPlus, Shield, MoreVertical, Search, Filter, Trash2, Edit2, CheckCircle2, UserCog } from 'lucide-react';
 import { Button } from '../Button';
 import { UserHoverCard } from '../UserHoverCard';
@@ -43,9 +45,12 @@ const PERMISSION_GROUPS = [
 
 export const TeamsView: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'members' | 'roles'>('members');
-    const [members, setMembers] = useState<Contact[]>([]);
+    const [members, setMembers] = useState<TeamMember[]>([]);
     const [roles, setRoles] = useState<Role[]>([]);
-    const [currentUser, setCurrentUser] = useState<Contact>(db.getCurrentUser());
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+    const [inviteEmails, setInviteEmails] = useState('');
+    const [inviteRoleId, setInviteRoleId] = useState<string>('');
+    const [error, setError] = useState<string | null>(null);
 
     // Modals
     const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -62,31 +67,58 @@ export const TeamsView: React.FC = () => {
         refreshData();
     }, []);
 
-    const refreshData = () => {
-        setMembers(db.getContacts().filter(c => c.role !== 'Applicant'));
-        setRoles(db.getRoles());
-        setCurrentUser(db.getCurrentUser());
+    const refreshData = async () => {
+        setError(null);
+        const { user } = await auth.getUser();
+        setCurrentUserId(user?.id || null);
+
+        const [loadedMembers, loadedRoles] = await Promise.all([
+            db.getTeamMembers(),
+            db.getRoles(),
+        ]);
+
+        // Derive usersCount by role name
+        const counts = loadedMembers.reduce<Record<string, number>>((acc, m) => {
+            acc[m.role] = (acc[m.role] || 0) + 1;
+            return acc;
+        }, {});
+
+        setMembers(loadedMembers);
+        setRoles(loadedRoles.map(r => ({ ...r, usersCount: counts[r.name] || 0 })));
+
+        // Default invite role to first available role
+        if (!inviteRoleId && loadedRoles[0]?.id) {
+            setInviteRoleId(loadedRoles[0].id);
+        }
     };
 
-    const handleCreateRole = (e: React.FormEvent) => {
+    const handleCreateRole = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!editingRole.name) return;
 
-        if (editingRole.id) {
-            // Update
-            db.updateRole(editingRole as Role);
-        } else {
-            // Create
-            db.addRole({
-                name: editingRole.name,
-                permissions: editingRole.permissions || [],
-                color: editingRole.color || 'bg-slate-100 text-slate-700'
-            });
-        }
+        try {
+            setError(null);
+            if (editingRole.id) {
+                await db.updateRole({
+                    id: editingRole.id,
+                    name: editingRole.name,
+                    color: editingRole.color,
+                    permissions: editingRole.permissions || [],
+                });
+            } else {
+                await db.createRole({
+                    name: editingRole.name,
+                    permissions: editingRole.permissions || [],
+                    color: editingRole.color || 'bg-slate-100 text-slate-700',
+                });
+            }
 
-        refreshData();
-        setIsRoleModalOpen(false);
-        setEditingRole({ name: '', permissions: [], color: 'bg-slate-100 text-slate-700' });
+            await refreshData();
+            setIsRoleModalOpen(false);
+            setEditingRole({ name: '', permissions: [], color: 'bg-slate-100 text-slate-700' });
+        } catch (e: any) {
+            setError(e?.message || 'Failed to save role');
+        }
     };
 
     const openRoleModal = (role?: Role) => {
@@ -113,10 +145,25 @@ export const TeamsView: React.FC = () => {
         }
     };
 
-    const handleImpersonate = (userId: string) => {
-        db.setCurrentUser(userId);
-        refreshData();
-        window.location.reload(); // Force reload to re-render layout with new permissions
+    const handleSendInvites = async () => {
+        const emails = inviteEmails
+            .split(/[,\n]/g)
+            .map(s => s.trim())
+            .filter(Boolean);
+
+        if (emails.length === 0) return;
+        if (!inviteRoleId) return;
+
+        try {
+            setError(null);
+            for (const email of emails) {
+                await db.addTeamMemberByEmail(email, inviteRoleId);
+            }
+            setInviteEmails('');
+            setIsInviteModalOpen(false);
+        } catch (e: any) {
+            setError(e?.message || 'Failed to add users');
+        }
     };
 
     return (
@@ -144,10 +191,16 @@ export const TeamsView: React.FC = () => {
                         </button>
                     </div>
                     <Button className="flex items-center gap-2" onClick={() => setIsInviteModalOpen(true)}>
-                        <UserPlus className="w-4 h-4" /> Invite User
+                        <UserPlus className="w-4 h-4" /> Add User
                     </Button>
                 </div>
             </div>
+
+            {error && (
+                <div className="bg-rose-50 border border-rose-200 text-rose-800 rounded-xl px-4 py-3 text-sm">
+                    {error}
+                </div>
+            )}
 
             {activeTab === 'members' && (
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -173,7 +226,7 @@ export const TeamsView: React.FC = () => {
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {members.map((member) => (
-                                <tr key={member.id} className={`hover:bg-slate-50 transition-colors ${currentUser.id === member.id ? 'bg-indigo-50/30' : ''}`}>
+                                <tr key={member.memberId} className={`hover:bg-slate-50 transition-colors ${currentUserId && member.userId === currentUserId ? 'bg-indigo-50/30' : ''}`}>
                                     <td className="p-4 pl-6">
                                         <UserHoverCard user={member}>
                                             <div className="flex items-center gap-3 cursor-pointer group">
@@ -181,7 +234,7 @@ export const TeamsView: React.FC = () => {
                                                 <div>
                                                     <div className="font-bold text-slate-900 text-sm group-hover:text-indigo-600 transition-colors">
                                                         {member.name}
-                                                        {currentUser.id === member.id && <span className="ml-2 text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">You</span>}
+                                                        {currentUserId && member.userId === currentUserId && <span className="ml-2 text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">You</span>}
                                                     </div>
                                                     <div className="text-slate-500 text-xs">{member.email}</div>
                                                 </div>
@@ -207,15 +260,6 @@ export const TeamsView: React.FC = () => {
                                     </td>
                                     <td className="p-4 text-right">
                                         <div className="flex justify-end gap-2">
-                                            {currentUser.id !== member.id && (
-                                                <button
-                                                    onClick={() => handleImpersonate(member.id)}
-                                                    className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors text-xs font-bold flex items-center gap-1"
-                                                    title="Impersonate User (Demo Only)"
-                                                >
-                                                    <UserCog className="w-4 h-4" />
-                                                </button>
-                                            )}
                                             <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
                                                 <MoreVertical className="w-4 h-4" />
                                             </button>
@@ -287,24 +331,33 @@ export const TeamsView: React.FC = () => {
             )}
 
             {/* Invite Modal */}
-            <Modal isOpen={isInviteModalOpen} onClose={() => setIsInviteModalOpen(false)} title="Invite Team Member">
+            <Modal isOpen={isInviteModalOpen} onClose={() => setIsInviteModalOpen(false)} title="Add User">
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-1">Email Addresses</label>
-                        <textarea className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none h-24" placeholder="Enter emails separated by commas..." />
+                        <label className="block text-sm font-semibold text-slate-700 mb-1">User email addresses</label>
+                        <textarea
+                            className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none h-24"
+                            placeholder="Enter emails separated by commas or new lines…"
+                            value={inviteEmails}
+                            onChange={(e) => setInviteEmails(e.target.value)}
+                        />
                     </div>
                     <div>
                         <label className="block text-sm font-semibold text-slate-700 mb-1">Assign Role</label>
-                        <select className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
-                            {roles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
+                        <select
+                            className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                            value={inviteRoleId}
+                            onChange={(e) => setInviteRoleId(e.target.value)}
+                        >
+                            {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                         </select>
                     </div>
                     <div className="bg-slate-50 p-4 rounded-lg text-xs text-slate-500">
-                        New members will receive an email invitation to join your workspace.
+                        This will immediately add existing users (who already signed up) to your workspace in Supabase.
                     </div>
                     <div className="pt-4 flex justify-end gap-3">
                         <Button variant="ghost" onClick={() => setIsInviteModalOpen(false)}>Cancel</Button>
-                        <Button>Send Invitations</Button>
+                        <Button onClick={handleSendInvites}>Add Users</Button>
                     </div>
                 </div>
             </Modal>

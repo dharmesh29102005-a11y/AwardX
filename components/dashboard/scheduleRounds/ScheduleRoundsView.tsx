@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Program } from '../../../services/demoDb';
+import { Program } from '../../../services/models';
 import { WorkflowView } from './WorkflowView';
 import { TileView } from './TileView';
 import { Layout, Grid, Workflow, Plus } from 'lucide-react';

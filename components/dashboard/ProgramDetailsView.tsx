@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { db } from '../../services/database';
-import { Program } from '../../services/demoDb';
+import { Program } from '../../services/models';
 import { Button } from '../Button';
 import { Calendar, Image as ImageIcon, Type, Link as LinkIcon, Save, AlertCircle } from 'lucide-react';
 

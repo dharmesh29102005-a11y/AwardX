@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { ArrowUpRight, ArrowDownRight, Users, FileCheck, DollarSign, Clock, Calendar, Download, Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { Program } from '../../services/demoDb';
+import { Program } from '../../services/models';
 import { db as databaseService } from '../../services/database';
 
 const submissionData = [

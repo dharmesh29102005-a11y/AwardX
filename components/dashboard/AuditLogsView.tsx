@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { db, Log } from '../../services/demoDb';
+import { db } from '../../services/database';
+import { Log } from '../../services/models';
 import { Search, Filter, Clock, Activity, AlertCircle, CheckCircle2, User, RefreshCw } from 'lucide-react';
 import { UserHoverCard } from '../UserHoverCard';
 
@@ -8,7 +9,11 @@ export const AuditLogsView: React.FC = () => {
   const [logs, setLogs] = useState<Log[]>([]);
 
   useEffect(() => {
-    setLogs(db.getLogs());
+    const load = async () => {
+      const data = await db.getLogs();
+      setLogs(data);
+    };
+    load();
   }, []);
 
   const getTypeIcon = (type: string) => {
