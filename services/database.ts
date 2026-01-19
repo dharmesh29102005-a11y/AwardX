@@ -16,6 +16,7 @@ import {
   settings,
   forms,
 } from './supabase';
+import { getCurrentUserId } from './supabase';
 import { Program, Category, Round, Submission, Judge, Contact, Role, Message, Log, SocialAccount, ScheduledPost, TeamMember } from './models';
 
 class DatabaseService {
@@ -932,6 +933,75 @@ class DatabaseService {
       resourceId: formId,
       metadata: { fieldsCount: fieldsPayload?.length || 0 },
     });
+  }
+
+  async submitFormResponse(formId: string, formData: Record<string, any>) {
+    if (!supabase) throw new Error('Supabase not configured');
+
+    // Get the form to find the program_id
+    const { data: form, error: formError } = await supabase
+      .from('program_forms')
+      .select('program_id, title')
+      .eq('id', formId)
+      .single();
+
+    if (formError || !form) {
+      throw new Error(formError?.message || 'Form not found');
+    }
+
+    // Get current user info
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      throw new Error('User must be authenticated to submit forms');
+    }
+
+    // Get user profile for name/email
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name, email')
+      .eq('id', userId)
+      .single();
+
+    // Create submission with form data in submission_data field
+    // Set allowPublicSubmission flag to allow submissions from any authenticated user
+    const { data, error } = await submissions.create({
+      program_id: form.program_id,
+      title: form.title || 'Form Submission',
+      description: `Form submission for ${form.title}`,
+      submission_data: {
+        form_id: formId,
+        form_title: form.title,
+        responses: formData,
+        submitted_at: new Date().toISOString(),
+      },
+      allowPublicSubmission: true, // Allow public form submissions
+    });
+
+    if (error || !data) {
+      throw new Error(error?.message || 'Failed to submit form');
+    }
+
+    // Update with applicant name/email if available
+    if (profile) {
+      await supabase
+        .from('submissions')
+        .update({
+          applicant_name: profile.full_name || null,
+          applicant_email: profile.email || null,
+        })
+        .eq('id', (data as any).id);
+    }
+
+    await this.safeAuditLog({
+      action: 'Submitted form response',
+      actionType: 'create',
+      resourceType: 'submission',
+      resourceId: (data as any).id,
+      details: `Form: ${form.title}`,
+      metadata: { formId, programId: form.program_id },
+    });
+
+    return data;
   }
 
   // Stats

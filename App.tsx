@@ -23,6 +23,7 @@ import { ProductShowcase } from './components/ProductShowcase';
 import { Dashboard } from './components/dashboard/Dashboard';
 import { AuthCallback } from './components/AuthCallback';
 import { WorkflowPage } from './components/pages/WorkflowPage';
+import { FormSubmissionPage } from './components/pages/FormSubmissionPage';
 import { auth } from './services/supabase';
 
 const CTASection = () => (
@@ -62,12 +63,20 @@ const CTASection = () => (
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(() => {
-    // Check URL on initial load for workflow page
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('page') === 'workflow') {
-      return 'workflow';
+    try {
+      // Check URL on initial load for workflow page or form page
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('page') === 'workflow') {
+        return 'workflow';
+      }
+      if (params.get('page') === 'form' && params.get('formId')) {
+        return 'form-submission';
+      }
+      return 'home';
+    } catch (e) {
+      console.error('Error reading URL params:', e);
+      return 'home';
     }
-    return 'home';
   });
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
@@ -75,14 +84,45 @@ const App: React.FC = () => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
+        const params = new URLSearchParams(window.location.search);
+        const isFormPage = params.get('page') === 'form' && params.get('formId');
+        
         const { session, error } = await auth.getSession();
         if (error) {
           console.error('Error checking auth:', error);
           setIsCheckingAuth(false);
           return;
         }
+        
+        if (isFormPage) {
+          // If trying to access form page, check authentication
+          if (!session) {
+            // Not authenticated - redirect to login
+            // Store return URL for after login
+            const formUrl = window.location.href;
+            sessionStorage.setItem('formReturnUrl', formUrl);
+            setCurrentPage('login');
+            setIsCheckingAuth(false);
+            return;
+          } else {
+            // Authenticated - ensure form-submission page is set
+            if (currentPage !== 'form-submission') {
+              setCurrentPage('form-submission');
+            }
+            setIsCheckingAuth(false);
+            return;
+          }
+        }
+        
         if (session) {
           // User is authenticated, redirect to dashboard if on home/login/signup
+          // But don't redirect if already on form-submission page
+          if (currentPage === 'form-submission') {
+            setIsCheckingAuth(false);
+            return;
+          }
+          
+          // Only redirect to dashboard if on home/login/signup
           if (['home', 'login', 'signup'].includes(currentPage)) {
             setCurrentPage('dashboard');
           }
@@ -99,9 +139,30 @@ const App: React.FC = () => {
     // Listen for auth state changes
     const authStateChangeResult = auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
-        setCurrentPage('dashboard');
+        // Check if there's a return URL for form submission
+        const returnUrl = sessionStorage.getItem('formReturnUrl');
+        if (returnUrl) {
+          // Clear the return URL
+          sessionStorage.removeItem('formReturnUrl');
+          // Use a small delay to ensure session is fully loaded
+          setTimeout(() => {
+            window.location.href = returnUrl;
+          }, 100);
+        } else {
+          // Only redirect to dashboard if not on a form page
+          const params = new URLSearchParams(window.location.search);
+          const isFormPage = params.get('page') === 'form' && params.get('formId');
+          if (!isFormPage && currentPage !== 'form-submission') {
+            setCurrentPage('dashboard');
+          }
+        }
       } else if (event === 'SIGNED_OUT') {
-        setCurrentPage('home');
+        // Only redirect away if not on a form page
+        const params = new URLSearchParams(window.location.search);
+        const isFormPage = params.get('page') === 'form' && params.get('formId');
+        if (!isFormPage) {
+          setCurrentPage('home');
+        }
       }
     });
 
@@ -112,6 +173,8 @@ const App: React.FC = () => {
         subscription.unsubscribe();
       }
     };
+    // Only run on mount - don't re-run when currentPage changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Handle OAuth callback
@@ -128,6 +191,10 @@ const App: React.FC = () => {
     switch (currentPage) {
       case 'workflow':
         return <WorkflowPage />;
+      case 'form-submission':
+        const params = new URLSearchParams(window.location.search);
+        const formId = params.get('formId');
+        return <FormSubmissionPage onNavigate={setCurrentPage} formId={formId || undefined} />;
       case 'features':
         return <FeaturesPage />;
       case 'how-it-works':
@@ -158,13 +225,17 @@ const App: React.FC = () => {
     }
   };
 
-  // Show loading state while checking auth
-  if (isCheckingAuth) {
+  // Show loading state while checking auth (especially important for form pages)
+  // Only show this if we're not already on login/signup/form-submission page
+  if (isCheckingAuth && !['login', 'signup', 'form-submission', 'auth-callback'].includes(currentPage)) {
+    const params = new URLSearchParams(window.location.search);
+    const isFormPage = params.get('page') === 'form' && params.get('formId');
+    
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <p className="text-slate-600">Loading...</p>
+          <p className="text-slate-600">{isFormPage ? 'Checking authentication...' : 'Loading...'}</p>
         </div>
       </div>
     );
@@ -238,6 +309,30 @@ const App: React.FC = () => {
     return <WorkflowPage />;
   }
 
+  // Render Form Submission page (handles its own Header/Footer)
+  if (currentPage === 'form-submission') {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const formId = params.get('formId');
+      return <FormSubmissionPage onNavigate={setCurrentPage} formId={formId || undefined} />;
+    } catch (error) {
+      console.error('Error rendering form submission page:', error);
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50">
+          <div className="text-center">
+            <p className="text-red-600 mb-4">Error loading form. Please try again.</p>
+            <button
+              onClick={() => setCurrentPage('home')}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg"
+            >
+              Go Home
+            </button>
+          </div>
+        </div>
+      );
+    }
+  }
+
   // Render Demo/Dashboard without Header/Footer wrapping
   if (currentPage === 'demo' || currentPage === 'dashboard') {
     return (
@@ -252,7 +347,14 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-indigo-500/30 selection:text-indigo-900">
-      <Header onNavigate={setCurrentPage} currentPage={currentPage} />
+      <Header 
+        onNavigate={setCurrentPage} 
+        currentPage={currentPage} 
+        onLogout={async () => {
+          await auth.signOut();
+          setCurrentPage('home');
+        }}
+      />
       <main>
         <AnimatePresence mode="wait">
           <motion.div

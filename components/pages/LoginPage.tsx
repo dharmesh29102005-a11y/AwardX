@@ -62,8 +62,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
         setError(authError.message);
         setIsLoading(false);
       } else {
-        // Successfully logged in, navigate to dashboard
-        onNavigate('dashboard');
+        // Check if there's a return URL for form submission
+        const returnUrl = sessionStorage.getItem('formReturnUrl');
+        if (returnUrl) {
+          // Clear the return URL
+          sessionStorage.removeItem('formReturnUrl');
+          // Redirect back to the form
+          window.location.href = returnUrl;
+        } else {
+          // Successfully logged in, navigate to dashboard
+          onNavigate('dashboard');
+        }
       }
     } catch (err: any) {
       setError(err.message || 'Failed to sign in');

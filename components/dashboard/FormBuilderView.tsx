@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { FormBuilder, FormField, FormPage, FormTheme, FormBuilderRef } from './FormBuilder';
 import { db } from '../../services/database';
 import { Program } from '../../services/models';
-import { Save, FileText, Plus, Trash2 } from 'lucide-react';
+import { Save, FileText, Plus, Trash2, CheckCircle2, XCircle, X, Link2, Copy, Check } from 'lucide-react';
 import { Button } from '../Button';
 import { Modal } from '../Modal';
 
@@ -60,6 +60,10 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const [formBuilderKey, setFormBuilderKey] = useState(0);
   const formBuilderRef = useRef<FormBuilderRef>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [deleteMessage, setDeleteMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [copiedFormId, setCopiedFormId] = useState<string | null>(null);
 
   useEffect(() => {
     setPortalTarget(document.getElementById('dashboard-header-actions'));
@@ -89,18 +93,31 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
     setSavedForms(formsWithFields);
   };
 
-  const handleSave = (fields: FormField[], pages: FormPage[], theme: FormTheme) => {
+  const handleSave = async (fields: FormField[], pages: FormPage[], theme: FormTheme) => {
+    // Prevent duplicate saves
+    if (isSaving) return;
+
     setCurrentForm(fields);
     setCurrentPages(pages);
     setCurrentTheme(theme);
 
     if (selectedFormId) {
       // Update existing form
-      void (async () => {
+      setIsSaving(true);
+      setSaveMessage(null);
+      try {
         await db.updateForm(selectedFormId, { pages, theme });
         await db.replaceFormFields(selectedFormId, fields.map(mapFormFieldToDbPayload));
         await loadSavedForms();
-      })();
+        setSaveMessage({ type: 'success', text: 'Form saved successfully!' });
+        // Clear message after 3 seconds
+        setTimeout(() => setSaveMessage(null), 3000);
+      } catch (error: any) {
+        setSaveMessage({ type: 'error', text: error?.message || 'Failed to save form. Please try again.' });
+        setTimeout(() => setSaveMessage(null), 5000);
+      } finally {
+        setIsSaving(false);
+      }
     } else {
       // New form - open modal to get name
       setIsSaveModalOpen(true);
@@ -108,22 +125,33 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
   };
 
   const handleSaveNewForm = async () => {
-    if (!activeEvent || !formName.trim()) return;
+    if (!activeEvent || !formName.trim() || isSaving) return;
 
-    const newForm = await db.createForm({
-      program_id: activeEvent.id,
-      title: formName,
-      description: '',
-      is_active: true,
-    });
+    setIsSaving(true);
+    setSaveMessage(null);
+    try {
+      const newForm = await db.createForm({
+        program_id: activeEvent.id,
+        title: formName,
+        description: '',
+        is_active: true,
+      });
 
-    await db.updateForm((newForm as any).id, { pages: currentPages, theme: currentTheme });
-    await db.replaceFormFields((newForm as any).id, currentForm.map(mapFormFieldToDbPayload));
+      await db.updateForm((newForm as any).id, { pages: currentPages, theme: currentTheme });
+      await db.replaceFormFields((newForm as any).id, currentForm.map(mapFormFieldToDbPayload));
 
-    setFormName('');
-    setIsSaveModalOpen(false);
-    setSelectedFormId((newForm as any).id);
-    await loadSavedForms();
+      setFormName('');
+      setIsSaveModalOpen(false);
+      setSelectedFormId((newForm as any).id);
+      await loadSavedForms();
+      setSaveMessage({ type: 'success', text: `Form "${formName}" saved successfully!` });
+      setTimeout(() => setSaveMessage(null), 3000);
+    } catch (error: any) {
+      setSaveMessage({ type: 'error', text: error?.message || 'Failed to save form. Please try again.' });
+      setTimeout(() => setSaveMessage(null), 5000);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleLoadForm = (form: SavedForm) => {
@@ -136,10 +164,12 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
     setFormBuilderKey(prev => prev + 1);
   };
 
-  const handleDeleteForm = (formId: string) => {
+  const handleDeleteForm = async (formId: string) => {
     if (!window.confirm('Are you sure you want to delete this form?')) return;
 
-    void (async () => {
+    setDeleteMessage(null);
+    try {
+      const formName = savedForms.find(f => f.id === formId)?.name || 'this form';
       await db.deleteForm(formId);
 
       if (selectedFormId === formId) {
@@ -147,7 +177,36 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
         setCurrentForm([]);
       }
       await loadSavedForms();
-    })();
+      setDeleteMessage({ type: 'success', text: `Form "${formName}" deleted successfully!` });
+      setTimeout(() => setDeleteMessage(null), 3000);
+    } catch (error: any) {
+      setDeleteMessage({ type: 'error', text: error?.message || 'Failed to delete form. Please try again.' });
+      setTimeout(() => setDeleteMessage(null), 5000);
+    }
+  };
+
+  const handleCopyLink = async (formId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const baseUrl = window.location.origin;
+      const formLink = `${baseUrl}?page=form&formId=${formId}`;
+      
+      await navigator.clipboard.writeText(formLink);
+      setCopiedFormId(formId);
+      setTimeout(() => setCopiedFormId(null), 2000);
+    } catch (error) {
+      // Fallback for browsers that don't support clipboard API
+      const baseUrl = window.location.origin;
+      const formLink = `${baseUrl}?page=form&formId=${formId}`;
+      const textArea = document.createElement('textarea');
+      textArea.value = formLink;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopiedFormId(formId);
+      setTimeout(() => setCopiedFormId(null), 2000);
+    }
   };
 
   const handleNewForm = () => {
@@ -187,6 +246,56 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
 
   return (
     <div className="h-full flex flex-col">
+      {/* Success/Error Messages */}
+      {(saveMessage || deleteMessage) && (
+        <div className="px-4 py-2 z-50">
+          {saveMessage && (
+            <div className={`flex items-center justify-between px-4 py-3 rounded-lg shadow-md ${
+              saveMessage.type === 'success' 
+                ? 'bg-green-50 border border-green-200 text-green-800' 
+                : 'bg-red-50 border border-red-200 text-red-800'
+            }`}>
+              <div className="flex items-center gap-2">
+                {saveMessage.type === 'success' ? (
+                  <CheckCircle2 className="w-5 h-5" />
+                ) : (
+                  <XCircle className="w-5 h-5" />
+                )}
+                <span className="text-sm font-medium">{saveMessage.text}</span>
+              </div>
+              <button
+                onClick={() => setSaveMessage(null)}
+                className="ml-4 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+          {deleteMessage && (
+            <div className={`flex items-center justify-between px-4 py-3 rounded-lg shadow-md mt-2 ${
+              deleteMessage.type === 'success' 
+                ? 'bg-green-50 border border-green-200 text-green-800' 
+                : 'bg-red-50 border border-red-200 text-red-800'
+            }`}>
+              <div className="flex items-center gap-2">
+                {deleteMessage.type === 'success' ? (
+                  <CheckCircle2 className="w-5 h-5" />
+                ) : (
+                  <XCircle className="w-5 h-5" />
+                )}
+                <span className="text-sm font-medium">{deleteMessage.text}</span>
+              </div>
+              <button
+                onClick={() => setDeleteMessage(null)}
+                className="ml-4 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Header and Controls Portal */}
       {portalTarget && createPortal(
         <div className="flex items-center gap-4">
@@ -242,15 +351,29 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
                     </div>
                   </div>
 
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteForm(form.id);
-                    }}
-                    className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-all"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                    <button
+                      onClick={(e) => handleCopyLink(form.id, e)}
+                      className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-all"
+                      title="Copy form link"
+                    >
+                      {copiedFormId === form.id ? (
+                        <Check className="w-3.5 h-3.5 text-green-600" />
+                      ) : (
+                        <Link2 className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteForm(form.id);
+                      }}
+                      className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-all"
+                      title="Delete form"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))
             )}
@@ -267,6 +390,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
               initialFields={currentForm}
               initialPages={currentPages.length > 0 ? currentPages : undefined}
               initialTheme={currentTheme}
+              isSaving={isSaving}
             />
           ) : (
             <div className="h-full bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-slate-400 text-center p-8">
@@ -305,9 +429,9 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
             <Button variant="ghost" onClick={() => setIsSaveModalOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveNewForm} disabled={!formName.trim()}>
+            <Button onClick={handleSaveNewForm} disabled={!formName.trim() || isSaving}>
               <Save className="w-4 h-4 mr-2" />
-              Save Form
+              {isSaving ? 'Saving...' : 'Save Form'}
             </Button>
           </div>
         </div>

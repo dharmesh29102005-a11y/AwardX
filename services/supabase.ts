@@ -859,25 +859,45 @@ export const submissions = {
     title: string;
     description?: string;
     submission_data?: Record<string, any>;
+    allowPublicSubmission?: boolean; // Flag for public form submissions (not a DB column)
   }) => {
     const orgId = await getCurrentOrgId();
     const userId = await getCurrentUserId();
-    if (!orgId || !userId) return { data: null, error: { message: 'Not authenticated' } };
+    if (!userId) return { data: null, error: { message: 'Not authenticated' } };
     
-    // Verify program belongs to org
-    const { data: program } = await supabase
-      .from('programs')
-      .select('id')
-      .eq('id', submission.program_id)
-      .eq('organization_id', orgId)
-      .single();
+    // Check if this is a public form submission (submission_data contains form_id)
+    const isPublicFormSubmission = submission.submission_data?.form_id !== undefined;
     
-    if (!program) return { data: null, error: { message: 'Program not found' } };
+    if (isPublicFormSubmission || submission.allowPublicSubmission) {
+      // For public form submissions, just verify the program exists
+      const { data: program } = await supabase
+        .from('programs')
+        .select('id')
+        .eq('id', submission.program_id)
+        .single();
+      
+      if (!program) return { data: null, error: { message: 'Program not found' } };
+    } else {
+      // For internal submissions, verify program belongs to user's org
+      if (!orgId) return { data: null, error: { message: 'Not authenticated' } };
+      
+      const { data: program } = await supabase
+        .from('programs')
+        .select('id')
+        .eq('id', submission.program_id)
+        .eq('organization_id', orgId)
+        .single();
+      
+      if (!program) return { data: null, error: { message: 'Program not found' } };
+    }
+    
+    // Extract allowPublicSubmission from submission object before inserting
+    const { allowPublicSubmission, ...submissionData } = submission;
     
     const { data, error } = await supabase
       .from('submissions')
       .insert({
-        ...submission,
+        ...submissionData,
         applicant_id: userId,
       })
       .select()
@@ -1908,7 +1928,7 @@ export const forms = {
     return { data, error };
   },
 
-  update: async (id: string, updates: Partial<{ title: string; description: string; is_active: boolean }>) => {
+  update: async (id: string, updates: Partial<{ title: string; description: string; is_active: boolean; pages: any; theme: any }>) => {
     const { data, error } = await supabase
       .from('program_forms')
       .update(updates)
@@ -1919,6 +1939,17 @@ export const forms = {
   },
 
   delete: async (id: string) => {
+    // First delete all form fields to avoid foreign key constraint violation
+    const { error: fieldsError } = await supabase
+      .from('program_form_fields')
+      .delete()
+      .eq('form_id', id);
+    
+    if (fieldsError) {
+      return { error: fieldsError };
+    }
+    
+    // Then delete the form
     const { error } = await supabase.from('program_forms').delete().eq('id', id);
     return { error };
   },

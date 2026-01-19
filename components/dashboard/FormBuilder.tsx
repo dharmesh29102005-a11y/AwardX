@@ -3,7 +3,7 @@ import {
   GripVertical, Trash2, Settings, Eye, Save, Plus, Type, FileText,
   ImageIcon, Link2, List, Calendar, Mail, CheckSquare, Radio,
   MoreVertical, ArrowUp, ArrowDown, X, AlertCircle, Palette, Layers,
-  ChevronLeft, ChevronRight, Layout, Edit3, Move
+  ChevronLeft, ChevronRight, Layout, Edit3, Move, ChevronDown
 } from 'lucide-react';
 import { Button } from '../Button';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -47,6 +47,7 @@ interface FormBuilderProps {
   initialFields?: FormField[];
   initialPages?: FormPage[];
   initialTheme?: FormTheme;
+  isSaving?: boolean;
 }
 
 export interface FormBuilderRef {
@@ -96,7 +97,8 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
   onSave, 
   initialFields = [],
   initialPages,
-  initialTheme = defaultTheme
+  initialTheme = defaultTheme,
+  isSaving = false
 }, ref) => {
   // --- State ---
   const [fields, setFields] = useState<FormField[]>(initialFields);
@@ -113,6 +115,8 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
   const [activeTab, setActiveTab] = useState<'build' | 'design' | 'settings'>('build');
   const [isPreview, setIsPreview] = useState(false);
   const [previewPageIdx, setPreviewPageIdx] = useState(0);
+  const [draggedFieldId, setDraggedFieldId] = useState<string | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   // --- Effects ---
   useEffect(() => {
@@ -218,6 +222,86 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
     if (onSave) onSave(fields, pages, theme);
   };
 
+  // Drag and Drop handlers with live reordering (like mobile app icons)
+  const handleDragStart = (e: React.DragEvent, fieldId: string) => {
+    setDraggedFieldId(fieldId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', fieldId);
+    // Set drag image opacity
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '0.5';
+    }
+  };
+
+  const handleDragEnter = (e: React.DragEvent, targetFieldId: string, targetIndex: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!draggedFieldId || draggedFieldId === targetFieldId) return;
+
+    const draggedIndex = fields.findIndex(f => f.id === draggedFieldId);
+    if (draggedIndex === -1 || draggedIndex === targetIndex) return;
+
+    setDragOverIndex(targetIndex);
+
+    // Live reorder: move fields in real-time as you drag
+    const newFields = [...fields];
+    const [removed] = newFields.splice(draggedIndex, 1);
+    newFields.splice(targetIndex, 0, removed);
+
+    setFields(newFields);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    // Only clear if actually leaving the drop zone
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+    
+    // Small threshold to prevent flickering when moving between child elements
+    const threshold = 10;
+    if (x < rect.left - threshold || x > rect.right + threshold || 
+        y < rect.top - threshold || y > rect.bottom + threshold) {
+      // Don't clear immediately - wait a bit to prevent flicker
+      setTimeout(() => {
+        // Only clear if mouse is still outside
+        const currentRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const currentX = e.clientX;
+        const currentY = e.clientY;
+        if (currentX < currentRect.left - threshold || currentX > currentRect.right + threshold || 
+            currentY < currentRect.top - threshold || currentY > currentRect.bottom + threshold) {
+          setDragOverIndex(null);
+        }
+      }, 50);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Fields are already in correct position from live reordering
+    setDragOverIndex(null);
+    setDraggedFieldId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedFieldId(null);
+    setDragOverIndex(null);
+    // Reset any drag styling
+    const elements = document.querySelectorAll('[data-dragged-field]');
+    elements.forEach(el => {
+      if (el instanceof HTMLElement) {
+        el.style.opacity = '';
+        el.removeAttribute('data-dragged-field');
+      }
+    });
+  };
+
   // --- Rendering ---
 
   const renderFieldInput = (field: FormField, isReadOnly = false) => {
@@ -232,10 +316,19 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
         return <textarea disabled={isReadOnly} className="w-full p-3 border rounded-md bg-white/50 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all resize-y min-h-[100px]" placeholder={field.placeholder} style={style} />;
       case 'select':
         return (
-          <select disabled={isReadOnly} className="w-full p-3 border rounded-md bg-white/50 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" style={style}>
-            <option>Select an option...</option>
-            {field.options?.map((opt, i) => <option key={i}>{opt}</option>)}
-          </select>
+          <div className="relative">
+            <select 
+              disabled={isReadOnly} 
+              className="w-full p-3 pr-10 border border-slate-200 rounded-lg bg-white text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm" 
+              style={style}
+            >
+              <option value="" disabled>{field.placeholder || 'Select an option...'}</option>
+              {field.options?.map((opt, i) => <option key={i} value={opt}>{opt}</option>)}
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+              <ChevronDown className="w-5 h-5 text-slate-400" />
+            </div>
+          </div>
         );
       case 'radio':
       case 'checkbox':
@@ -308,21 +401,51 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
         </div>
           ) : (
             <AnimatePresence mode='popLayout'>
-              {activeFields.map((field) => (
+              {activeFields.map((field, index) => {
+                const isDragging = draggedFieldId === field.id;
+                const isDragOver = dragOverIndex === index && !isDragging;
+                
+                return (
                 <motion.div
                   layout
                   initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
+                  animate={{ 
+                    opacity: isDragging ? 0.5 : 1, 
+                    y: 0,
+                    scale: isDragging ? 0.98 : 1,
+                  }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ duration: 0.2 }}
+                  transition={{ 
+                    layout: { 
+                      duration: 0.3, 
+                      ease: [0.25, 0.1, 0.25, 1] // Smooth easing for mobile-like feel
+                    },
+                    opacity: { duration: 0.2 },
+                    scale: { duration: 0.2 }
+                  }}
                   key={field.id}
-                  onClick={() => setSelectedFieldId(field.id)}
+                  data-dragged-field={isDragging ? field.id : undefined}
+                  onClick={() => {
+                    // Prevent click selection during/right after drag
+                    if (!draggedFieldId && !dragOverIndex) {
+                      setSelectedFieldId(field.id);
+                    }
+                  }}
+                  draggable
+                  onDragStart={(e: React.DragEvent) => handleDragStart(e, field.id)}
+                  onDragEnter={(e: React.DragEvent) => handleDragEnter(e, field.id, index)}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
                   className={`
-                            relative bg-white rounded-xl border-2 transition-all cursor-pointer group
-                            ${selectedFieldId === field.id
+                            relative bg-white rounded-xl border-2 transition-colors cursor-grab active:cursor-grabbing group
+                            ${selectedFieldId === field.id && !isDragging
                       ? 'border-indigo-500 shadow-xl shadow-indigo-500/10 ring-1 ring-indigo-500/20 z-10'
                       : 'border-transparent hover:border-slate-200 shadow-sm hover:shadow-md'
                     }
+                            ${isDragging ? 'z-50 opacity-50 cursor-grabbing' : ''}
+                            ${isDragOver ? 'ring-2 ring-indigo-300 ring-offset-2 border-indigo-200' : ''}
                         `}
                 >
                   <div className="p-6">
@@ -348,11 +471,20 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
       </div>
 
                   {/* Drag Handle Indicator */}
-                  <div className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-300 opacity-0 group-hover:opacity-100 cursor-move p-1">
+                  <div 
+                    className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-300 opacity-0 group-hover:opacity-100 cursor-move p-1"
+                    draggable
+                    onDragStart={(e: React.DragEvent) => {
+                      e.stopPropagation();
+                      handleDragStart(e, field.id);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <GripVertical className="w-4 h-4" />
             </div>
                 </motion.div>
-              ))}
+                );
+              })}
             </AnimatePresence>
             )}
           </div>
@@ -529,8 +661,8 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
             <Button variant="ghost" onClick={() => setIsPreview(true)}>
               <Eye className="w-4 h-4 mr-2" /> Preview
             </Button>
-            <Button variant="primary" onClick={handleSave} className="shadow-lg shadow-indigo-500/20">
-              <Save className="w-4 h-4 mr-2" /> Save Form
+            <Button variant="primary" onClick={handleSave} disabled={isSaving} className="shadow-lg shadow-indigo-500/20">
+              <Save className="w-4 h-4 mr-2" /> {isSaving ? 'Saving...' : 'Save Form'}
             </Button>
                     </div>
                   </div>
@@ -573,32 +705,42 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                   </div>
 
               <div className="space-y-3">
-                <label className="text-xs font-semibold text-slate-500 uppercase">Text Typography</label>
-                <select
-                  value={theme.fontFamily}
-                  onChange={e => setTheme({ ...theme, fontFamily: e.target.value })}
-                  className="w-full p-2 border rounded-lg text-sm bg-white"
-                >
-                  <option value="Inter, sans-serif">Inter (Modern)</option>
-                  <option value="serif">Serif (Elegant)</option>
-                  <option value="monospace">Monospace (Technical)</option>
-                </select>
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Text Typography</label>
+                <div className="relative">
+                  <select
+                    value={theme.fontFamily}
+                    onChange={e => setTheme({ ...theme, fontFamily: e.target.value })}
+                    className="w-full p-3 pr-10 border border-slate-200 rounded-lg text-sm bg-white text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer hover:border-slate-300 shadow-sm"
+                  >
+                    <option value="Inter, sans-serif">Inter (Modern)</option>
+                    <option value="serif">Serif (Elegant)</option>
+                    <option value="monospace">Monospace (Technical)</option>
+                  </select>
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                    <ChevronDown className="w-4 h-4 text-slate-400" />
+                  </div>
+                </div>
                 </div>
 
                   <div className="space-y-3">
-                <label className="text-xs font-semibold text-slate-500 uppercase">Style</label>
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <span className="text-sm text-slate-600">Rounded Corners</span>
-                      <select
-                    value={theme.borderRadius}
-                    onChange={e => setTheme({ ...theme, borderRadius: e.target.value })}
-                    className="text-sm border-none bg-transparent text-right font-medium text-indigo-600 focus:ring-0 cursor-pointer"
-                  >
-                    <option value="0px">None</option>
-                    <option value="0.5rem">Medium</option>
-                    <option value="1rem">Large</option>
-                    <option value="9999px">Full</option>
-                      </select>
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Style</label>
+                <div className="flex items-center justify-between p-3 border border-slate-200 rounded-lg bg-white hover:border-slate-300 transition-colors shadow-sm">
+                  <span className="text-sm font-medium text-slate-700">Rounded Corners</span>
+                  <div className="relative">
+                    <select
+                      value={theme.borderRadius}
+                      onChange={e => setTheme({ ...theme, borderRadius: e.target.value })}
+                      className="text-sm pr-8 pl-3 py-1.5 border-none bg-transparent text-right font-semibold text-indigo-600 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none cursor-pointer appearance-none hover:text-indigo-700 transition-colors"
+                    >
+                      <option value="0px">None</option>
+                      <option value="0.5rem">Medium</option>
+                      <option value="1rem">Large</option>
+                      <option value="9999px">Full</option>
+                    </select>
+                    <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <ChevronDown className="w-3.5 h-3.5 text-indigo-500" />
+                    </div>
+                  </div>
                     </div>
               </div>
             </div>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { FormField, FormPage, FormTheme } from './FormBuilder';
 import { Button } from '../Button';
-import { ChevronLeft, ChevronRight, Eye, UploadCloud } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eye, UploadCloud, ChevronDown } from 'lucide-react';
 
 interface FormPreviewProps {
   fields: FormField[];
@@ -48,12 +48,21 @@ export const FormPreview: React.FC<FormPreviewProps> = ({ fields, pages, theme =
         );
       case 'select':
         return (
-          <select disabled className="w-full p-3 border rounded-md bg-white/50 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" style={style}>
-            <option value="">{field.placeholder || 'Select an option...'}</option>
-            {field.options?.map((opt, idx) => (
-              <option key={idx} value={opt}>{opt}</option>
-            ))}
-          </select>
+          <div className="relative">
+            <select 
+              disabled 
+              className="w-full p-3 pr-10 border border-slate-200 rounded-lg bg-white text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm" 
+              style={style}
+            >
+              <option value="">{field.placeholder || 'Select an option...'}</option>
+              {field.options?.map((opt, idx) => (
+                <option key={idx} value={opt}>{opt}</option>
+              ))}
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+              <ChevronDown className="w-5 h-5 text-slate-400" />
+            </div>
+          </div>
         );
       case 'radio':
         return (
