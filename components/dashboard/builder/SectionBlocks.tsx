@@ -300,7 +300,9 @@ export const sectionDefs: SectionDef[] = [
             columns: 3,
             backgroundColor: 'slate-900',
             showVotes: true,
-            allowMultiple: false
+            allowMultiple: false,
+            voteLimit: 1,
+            votingDisabled: false
         }
     }
 ];
@@ -310,6 +312,39 @@ const VotingGallery: React.FC<{ programId: string; settings: any }> = ({ program
     const [submissions, setSubmissions] = useState<Submission[]>([]);
     const [loading, setLoading] = useState(true);
     const [votedIds, setVotedIds] = useState<string[]>([]);
+    const [votingId, setVotingId] = useState<string | null>(null);
+    const [voteError, setVoteError] = useState<string | null>(null);
+    const voteStorageKey = `awardx:votes:${programId}`;
+    const allowMultiple = !!settings?.allowMultiple;
+    const maxVotes = Number.isFinite(settings?.voteLimit)
+        ? Number(settings?.voteLimit)
+        : (allowMultiple ? 0 : 1);
+    const effectiveAllowMultiple = allowMultiple || maxVotes === 0;
+    const votingDisabled = !!settings?.votingDisabled;
+    const maxReached = maxVotes > 0 && votedIds.length >= maxVotes;
+    const canVote = !votingDisabled && !maxReached;
+
+    useEffect(() => {
+        if (!programId) return;
+        try {
+            const stored = localStorage.getItem(voteStorageKey);
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                if (Array.isArray(parsed)) setVotedIds(parsed);
+            }
+        } catch (error) {
+            console.warn('Failed to load vote history:', error);
+        }
+    }, [programId, voteStorageKey]);
+
+    useEffect(() => {
+        if (!programId) return;
+        try {
+            localStorage.setItem(voteStorageKey, JSON.stringify(votedIds));
+        } catch (error) {
+            console.warn('Failed to save vote history:', error);
+        }
+    }, [programId, voteStorageKey, votedIds]);
 
     useEffect(() => {
         const fetchSubmissions = async () => {
@@ -327,16 +362,23 @@ const VotingGallery: React.FC<{ programId: string; settings: any }> = ({ program
     }, [programId]);
 
     const handleVote = async (submissionId: string) => {
-        if (votedIds.includes(submissionId)) return;
+        if (!canVote) return;
+        if (!effectiveAllowMultiple && votedIds.length > 0) return;
+        if (votedIds.includes(submissionId) || votingId === submissionId) return;
 
         try {
+            setVoteError(null);
+            setVotingId(submissionId);
             await db.vote(submissionId);
             setVotedIds(prev => [...prev, submissionId]);
             setSubmissions(subs => subs.map(s =>
                 s.id === submissionId ? { ...s, votes: (s.votes || 0) + 1 } : s
             ));
-        } catch (error) {
+        } catch (error: any) {
             console.error('Vote failed:', error);
+            setVoteError(error?.message || 'Voting failed. Please try again.');
+        } finally {
+            setVotingId(null);
         }
     };
 
@@ -355,9 +397,30 @@ const VotingGallery: React.FC<{ programId: string; settings: any }> = ({ program
     );
 
     const columns = settings?.columns || 3;
+    const alreadyVotedOnce = votedIds.length > 0 && !effectiveAllowMultiple;
 
     return (
-        <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-${columns} gap-10`}>
+        <div>
+            {!canVote && (
+                <div className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-3 text-xs uppercase tracking-[0.2em] text-amber-200">
+                    {votingDisabled
+                        ? 'Voting is currently closed.'
+                        : maxReached
+                            ? 'Voting limit reached.'
+                            : 'Voting is currently unavailable.'}
+                </div>
+            )}
+            {alreadyVotedOnce && (
+                <div className="mb-6 rounded-2xl border border-blue-500/30 bg-blue-500/10 px-5 py-3 text-xs uppercase tracking-[0.2em] text-blue-200">
+                    You have already voted.
+                </div>
+            )}
+            {voteError && (
+                <div className="mb-6 rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-3 text-xs uppercase tracking-[0.2em] text-red-200">
+                    {voteError}
+                </div>
+            )}
+            <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-${columns} gap-10`}>
             {submissions.map((sub, idx) => (
                 <motion.div
                     key={sub.id}
@@ -402,18 +465,29 @@ const VotingGallery: React.FC<{ programId: string; settings: any }> = ({ program
 
                             <button
                                 onClick={() => handleVote(sub.id)}
-                                disabled={votedIds.includes(sub.id)}
+                                disabled={votingDisabled || maxReached || alreadyVotedOnce || votedIds.includes(sub.id) || votingId === sub.id}
                                 className={`flex-1 h-12 rounded-2xl font-bold text-[10px] uppercase tracking-[0.2em] transition-all duration-500 px-4 ${votedIds.includes(sub.id)
                                         ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                        : 'bg-white text-black hover:bg-blue-500 hover:text-white active:scale-95 shadow-lg'
+                                        : (votingDisabled || maxReached || alreadyVotedOnce)
+                                            ? 'bg-white/10 text-white/40 border border-white/10'
+                                            : votingId === sub.id
+                                            ? 'bg-white/10 text-white/40 border border-white/10'
+                                            : 'bg-white text-black hover:bg-blue-500 hover:text-white active:scale-95 shadow-lg'
                                     }`}
                             >
-                                {votedIds.includes(sub.id) ? 'Confirmed' : 'Cast Vote'}
+                                {votedIds.includes(sub.id)
+                                    ? 'Confirmed'
+                                    : votingId === sub.id
+                                        ? 'Casting...'
+                                        : votingDisabled || maxReached || alreadyVotedOnce
+                                            ? 'Voting Closed'
+                                            : 'Cast Vote'}
                             </button>
                         </div>
                     </div>
                 </motion.div>
             ))}
+            </div>
         </div>
     );
 };

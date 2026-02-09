@@ -58,10 +58,9 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [needsLogin, setNeedsLogin] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
-  // Check authentication first - redirect to login if not authenticated
+  // Check authentication for personalization, but allow public access
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -72,46 +71,24 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
         
         const { session } = await auth.getSession();
         
-        if (!session) {
-          // Not authenticated - redirect to login with return URL
-          const currentFormId = formId || getFormIdFromUrl();
-          const formUrl = currentFormId 
-            ? `${window.location.origin}${window.location.pathname}?page=form&formId=${currentFormId}`
-            : window.location.href;
-          
-          // Store return URL for after login
-          sessionStorage.setItem('formReturnUrl', formUrl);
-          
-          // Navigate to login
-          onNavigate('login');
-          setIsCheckingAuth(false);
-          return;
-        }
-        
-        // User is authenticated
-        setIsAuthenticated(true);
+        setIsAuthenticated(!!session);
         setIsCheckingAuth(false);
       } catch (err) {
         console.error('Error checking auth:', err);
+        setIsAuthenticated(false);
         setIsCheckingAuth(false);
       }
     };
 
     checkAuth();
     
-    // Also listen for auth state changes (for when user logs in)
+    // Also listen for auth state changes
     const { data } = auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
         setIsAuthenticated(true);
         setIsCheckingAuth(false);
       } else if (event === 'SIGNED_OUT') {
         setIsAuthenticated(false);
-        const currentFormId = formId || getFormIdFromUrl();
-        const formUrl = currentFormId 
-          ? `${window.location.origin}${window.location.pathname}?page=form&formId=${currentFormId}`
-          : window.location.href;
-        sessionStorage.setItem('formReturnUrl', formUrl);
-        onNavigate('login');
       }
     });
     
@@ -125,7 +102,7 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
 
   useEffect(() => {
     // Only load form if authenticated
-    if (!isAuthenticated || isCheckingAuth) return;
+    if (isCheckingAuth) return;
 
     const currentFormId = formId || getFormIdFromUrl();
     if (!currentFormId) {
@@ -153,6 +130,12 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
 
         if (formError || !form) {
           setIsError('Form not found');
+          setIsLoading(false);
+          return;
+        }
+
+        if (!form.is_active) {
+          setIsError('This nomination form is not published yet.');
           setIsLoading(false);
           return;
         }
@@ -190,7 +173,7 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
     };
 
     loadForm();
-  }, [isAuthenticated, isCheckingAuth, formId]);
+  }, [isCheckingAuth, formId]);
 
   const currentPage = formPages[currentPageIdx] || formPages[0];
   const pageFields = formFields.filter(f => f.pageId === currentPage?.id);
@@ -358,18 +341,6 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin text-indigo-600 mx-auto mb-4" />
           <p className="text-slate-600">Checking authentication...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // If not authenticated and not checking, redirect should have happened
-  // But if we're still here, show a message
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <p className="text-slate-600 mb-4">Redirecting to login...</p>
         </div>
       </div>
     );

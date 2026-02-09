@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { programPages } from '../../../services/supabase';
 import { sectionDefs, SectionPreview, DEFAULT_TEMPLATE } from './SectionBlocks';
 import { PropertyPanel } from './PropertyPanel';
-import { Reorder, useDragControls } from 'framer-motion';
 import { Save, Plus, GripVertical, Rocket, Eye, Monitor, Smartphone, Tablet, LayoutTemplate } from 'lucide-react';
 import { Button } from '../../Button';
 
@@ -154,7 +153,7 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
     const selectedSection = sections.find(s => s.id === selectedSectionId);
 
     return (
-        <div className="flex flex-col h-[calc(100vh-64px)] bg-slate-100">
+        <div className="flex flex-col h-[calc(100vh-64px)] min-h-0 bg-slate-100">
             {/* Top Bar */}
             <div className="bg-white border-b border-slate-200 px-6 py-3 flex justify-between items-center shadow-sm z-10">
                 <h1 className="text-lg font-bold text-slate-800">Page Builder</h1>
@@ -199,9 +198,9 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
                 </div>
             </div>
 
-            <div className="flex flex-1 overflow-hidden">
+            <div className="flex flex-1 min-h-0 overflow-hidden">
                 {/* Left Sidebar - Toolbox */}
-                <div className="w-64 bg-white border-r border-slate-200 overflow-y-auto flex-shrink-0">
+                <div className="w-64 bg-white border-r border-slate-200 overflow-y-auto flex-shrink-0 min-h-0">
                     <div className="p-4">
                         <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Add Section</h3>
                         <div className="grid grid-cols-1 gap-3">
@@ -221,7 +220,7 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
                 </div>
 
                 {/* Center - Canvas */}
-                <div className="flex-1 overflow-y-auto bg-slate-100 p-8 flex justify-center">
+                <div className="flex-1 min-h-0 overflow-y-auto bg-slate-100 p-8 flex justify-center">
                     <div
                         className={`bg-white shadow-xl min-h-[800px] transition-all duration-300 ${previewMode === 'mobile' ? 'w-[375px]' :
                             previewMode === 'tablet' ? 'w-[768px]' :
@@ -236,9 +235,9 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
                             </div>
                         )}
 
-                        <Reorder.Group axis="y" values={sections} onReorder={setSections} className="space-y-0 relative">
+                        <div className="space-y-0 relative">
                             {sections.map((section) => (
-                                <Reorder.Item key={section.id} value={section} className="relative group">
+                                <div key={section.id} className="relative group">
                                     {/* Hover Controls */}
                                     <div className={`absolute top-0 right-0 left-0 bottom-0 z-10 border-2 pointer-events-none transition-opacity ${selectedSectionId === section.id ? 'border-indigo-500 opacity-100' : 'border-transparent opacity-0 group-hover:opacity-100 group-hover:border-indigo-200'}`}>
                                         <div className="absolute top-2 right-2 pointer-events-auto flex items-center gap-2">
@@ -253,14 +252,14 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
                                     }}>
                                         <SectionPreview section={section} />
                                     </div>
-                                </Reorder.Item>
+                                </div>
                             ))}
-                        </Reorder.Group>
+                        </div>
                     </div>
                 </div>
 
                 {/* Right Sidebar - Properties */}
-                <div className="w-80 bg-white border-l border-slate-200 flex-shrink-0">
+                <div className="w-80 bg-white border-l border-slate-200 flex-shrink-0 min-h-0">
                     <PropertyPanel
                         section={selectedSection}
                         onChange={handleUpdateSection}

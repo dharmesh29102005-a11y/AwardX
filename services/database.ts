@@ -635,7 +635,7 @@ class DatabaseService {
       date: s.submitted_at ? new Date(s.submitted_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       image: s.cover_image_url || `https://source.unsplash.com/random/50x50?${s.id}`,
       assignedJudges: s.submission_judges?.map((sj: any) => sj.judge_id) || [],
-      votes: s.votes_count || 0,
+      votes: s.votes_count || s.submission_data?.votes || 0,
     };
   }
 
@@ -1064,7 +1064,7 @@ class DatabaseService {
     // Get the form to find the program_id
     const { data: form, error: formError } = await supabase
       .from('program_forms')
-      .select('program_id, title')
+      .select('program_id, title, is_active')
       .eq('id', formId)
       .single();
 
@@ -1072,18 +1072,19 @@ class DatabaseService {
       throw new Error(formError?.message || 'Form not found');
     }
 
-    // Get current user info
-    const userId = await getCurrentUserId();
-    if (!userId) {
-      throw new Error('User must be authenticated to submit forms');
+    if (!form.is_active) {
+      throw new Error('This nomination form is not published.');
     }
 
-    // Get user profile for name/email
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('full_name, email')
-      .eq('id', userId)
-      .single();
+    // Get current user info
+    const userId = await getCurrentUserId();
+    const profile = userId
+      ? await supabase
+        .from('profiles')
+        .select('full_name, email')
+        .eq('id', userId)
+        .single()
+      : null;
 
     // Create submission with form data in submission_data field
     // Set allowPublicSubmission flag to allow submissions from any authenticated user
@@ -1105,12 +1106,12 @@ class DatabaseService {
     }
 
     // Update with applicant name/email if available
-    if (profile) {
+    if (profile?.data) {
       await supabase
         .from('submissions')
         .update({
-          applicant_name: profile.full_name || null,
-          applicant_email: profile.email || null,
+          applicant_name: profile.data.full_name || null,
+          applicant_email: profile.data.email || null,
         })
         .eq('id', (data as any).id);
     }

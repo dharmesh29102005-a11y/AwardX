@@ -18,6 +18,7 @@ interface SavedForm {
   fields: FormField[];
   pages?: FormPage[];
   theme?: FormTheme;
+  isActive: boolean;
   createdAt: string;
 }
 
@@ -86,6 +87,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
           fields: (fields as any[]).map(mapDbFieldToFormField),
           pages: form.pages || undefined,
           theme: form.theme || undefined,
+          isActive: !!form.is_active,
           createdAt: form.created_at || form.updated_at || new Date().toISOString(),
         };
       })
@@ -134,7 +136,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
         program_id: activeEvent.id,
         title: formName,
         description: '',
-        is_active: true,
+        is_active: false,
       });
 
       await db.updateForm((newForm as any).id, { pages: currentPages, theme: currentTheme });
@@ -187,6 +189,12 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
 
   const handleCopyLink = async (formId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    const targetForm = savedForms.find(form => form.id === formId);
+    if (!targetForm?.isActive) {
+      setSaveMessage({ type: 'error', text: 'Publish the form to enable sharing.' });
+      setTimeout(() => setSaveMessage(null), 3000);
+      return;
+    }
     try {
       const baseUrl = window.location.origin;
       const formLink = `${baseUrl}?page=form&formId=${formId}`;
@@ -206,6 +214,26 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
       document.body.removeChild(textArea);
       setCopiedFormId(formId);
       setTimeout(() => setCopiedFormId(null), 2000);
+    }
+  };
+
+  const handleTogglePublish = async (formId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const targetForm = savedForms.find(form => form.id === formId);
+    if (!targetForm) return;
+
+    setSaveMessage(null);
+    try {
+      await db.updateForm(formId, { is_active: !targetForm.isActive });
+      await loadSavedForms();
+      setSaveMessage({
+        type: 'success',
+        text: targetForm.isActive ? 'Form unpublished.' : 'Form published.'
+      });
+      setTimeout(() => setSaveMessage(null), 3000);
+    } catch (error: any) {
+      setSaveMessage({ type: 'error', text: error?.message || 'Failed to update publish status.' });
+      setTimeout(() => setSaveMessage(null), 5000);
     }
   };
 
@@ -340,7 +368,15 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
                   onClick={() => handleLoadForm(form)}
                 >
                   <div className="pr-6">
-                    <h4 className={`text-sm font-semibold truncate ${selectedFormId === form.id ? 'text-indigo-900' : 'text-slate-700'}`}>{form.name}</h4>
+                    <div className="flex items-center gap-2">
+                      <h4 className={`text-sm font-semibold truncate ${selectedFormId === form.id ? 'text-indigo-900' : 'text-slate-700'}`}>{form.name}</h4>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold uppercase tracking-wide ${form.isActive
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                        : 'bg-amber-50 border-amber-200 text-amber-700'
+                        }`}>
+                        {form.isActive ? 'Published' : 'Draft'}
+                      </span>
+                    </div>
                     <div className="flex items-center gap-2 mt-1.5">
                       <span className="text-[10px] px-1.5 py-0.5 bg-white border border-slate-200 rounded text-slate-500 font-medium">
                         {form.fields.length} Qs
@@ -353,9 +389,24 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
 
                   <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
                     <button
+                      onClick={(e) => handleTogglePublish(form.id, e)}
+                      className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-all"
+                      title={form.isActive ? 'Unpublish form' : 'Publish form'}
+                    >
+                      {form.isActive ? (
+                        <XCircle className="w-3.5 h-3.5" />
+                      ) : (
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                    <button
                       onClick={(e) => handleCopyLink(form.id, e)}
-                      className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-all"
-                      title="Copy form link"
+                      className={`p-1.5 rounded-md transition-all ${form.isActive
+                        ? 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'
+                        : 'text-slate-300 cursor-not-allowed'
+                        }`}
+                      title={form.isActive ? 'Copy form link' : 'Publish to enable link'}
+                      disabled={!form.isActive}
                     >
                       {copiedFormId === form.id ? (
                         <Check className="w-3.5 h-3.5 text-green-600" />

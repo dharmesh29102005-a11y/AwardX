@@ -510,6 +510,7 @@ CREATE TABLE public.submissions (
   status character varying DEFAULT 'pending'::character varying,
   average_score numeric,
   total_scores integer DEFAULT 0,
+  votes_count integer DEFAULT 0,
   payment_status character varying DEFAULT 'pending'::character varying,
   payment_amount numeric,
   payment_id character varying,

@@ -41,7 +41,7 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({ section, onChange,
     };
 
     return (
-        <div className="h-full bg-white border-l border-slate-200 overflow-y-auto">
+        <div className="h-full min-h-0 bg-white border-l border-slate-200 overflow-y-auto">
             <div className="p-4 border-b border-slate-200 sticky top-0 bg-white z-10 flex justify-between items-center">
                 <h3 className="font-bold text-slate-800">{def.label} Settings</h3>
                 <div className="flex gap-1">
@@ -484,6 +484,35 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({ section, onChange,
 
                 {/* Settings Fields */}
                 <div className="space-y-4">
+                    {(section.section_type === 'voting' || section.type === 'voting') && (
+                        <div className="space-y-3">
+                            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Public Voting</h4>
+                            <div className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                                <div>
+                                    <div className="text-xs font-semibold text-slate-700">Disable voting</div>
+                                    <div className="text-[10px] text-slate-500">Hide vote actions for visitors.</div>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    checked={!!section.settings?.votingDisabled}
+                                    onChange={(e) => handleSettingsChange('votingDisabled', e.target.checked)}
+                                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-slate-600 mb-1">Votes per person</label>
+                                <input
+                                    type="number"
+                                    min={0}
+                                    value={Number.isFinite(section.settings?.voteLimit) ? section.settings?.voteLimit : 1}
+                                    onChange={(e) => handleSettingsChange('voteLimit', Number(e.target.value))}
+                                    className="w-full px-3 py-2 border rounded-md text-sm"
+                                />
+                                <p className="text-[10px] text-slate-400 mt-1">Use 0 for unlimited votes.</p>
+                            </div>
+                        </div>
+                    )}
+
                     <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Appearance</h4>
 
                     {def.defaultSettings.align !== undefined && (

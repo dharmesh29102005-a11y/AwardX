@@ -884,12 +884,12 @@ export const submissions = {
   }) => {
     const orgId = await getCurrentOrgId();
     const userId = await getCurrentUserId();
-    if (!userId) return { data: null, error: { message: 'Not authenticated' } };
 
     // Check if this is a public form submission (submission_data contains form_id)
     const isPublicFormSubmission = submission.submission_data?.form_id !== undefined;
+    const isPublicSubmission = isPublicFormSubmission || submission.allowPublicSubmission;
 
-    if (isPublicFormSubmission || submission.allowPublicSubmission) {
+    if (isPublicSubmission) {
       // For public form submissions, just verify the program exists
       const { data: program } = await supabase
         .from('programs')
@@ -900,6 +900,7 @@ export const submissions = {
       if (!program) return { data: null, error: { message: 'Program not found' } };
     } else {
       // For internal submissions, verify program belongs to user's org
+      if (!userId) return { data: null, error: { message: 'Not authenticated' } };
       if (!orgId) return { data: null, error: { message: 'Not authenticated' } };
 
       const { data: program } = await supabase
@@ -919,7 +920,7 @@ export const submissions = {
       .from('submissions')
       .insert({
         ...submissionData,
-        applicant_id: userId,
+        ...(userId ? { applicant_id: userId } : {}),
       })
       .select()
       .single();
@@ -1019,10 +1020,44 @@ export const submissions = {
         categories(title)
       `)
       .eq('program_id', programId)
-      .eq('status', 'Shortlisted') // Usually we only vote on shortlisted entries
-      .order('votes_count', { ascending: false });
+      .ilike('status', 'shortlisted') // Usually we only vote on shortlisted entries
+      .order('submitted_at', { ascending: false });
 
-    return { data, error };
+    if (!error && data && data.length > 0) {
+      return { data, error };
+    }
+
+    // Fallback: fetch all for the program and filter client-side to ensure shortlist visibility.
+    const { data: allData, error: allError } = await supabase
+      .from('submissions')
+      .select(`
+        *,
+        categories(title)
+      `)
+      .eq('program_id', programId);
+
+    if (allError || !allData) return { data: [], error: allError };
+
+    const shortlisted = allData.filter((s: any) => {
+      const status = String(s.status || '').toLowerCase();
+      const dataStatus = String(s.submission_data?.status || '').toLowerCase();
+      const dataFlag = s.submission_data?.shortlisted === true;
+      return status === 'shortlisted' || dataStatus === 'shortlisted' || dataFlag;
+    });
+
+    const idsToNormalize = shortlisted
+      .filter((s: any) => String(s.status || '').toLowerCase() !== 'shortlisted')
+      .map((s: any) => s.id);
+
+    if (idsToNormalize.length > 0) {
+      // Best-effort normalization so shortlisted status is stored in DB.
+      await supabase
+        .from('submissions')
+        .update({ status: 'shortlisted' })
+        .in('id', idsToNormalize);
+    }
+
+    return { data: shortlisted, error: null };
   },
 
   vote: async (id: string) => {
@@ -1035,8 +1070,29 @@ export const submissions = {
     // Fallback if rpc fails (dev mode)
     if (error) {
       console.warn('RPC increment_vote failed, attempting manual update');
-      const { data: sub } = await supabase.from('submissions').select('votes_count').eq('id', id).single();
-      return supabase.from('submissions').update({ votes_count: (sub?.votes_count || 0) + 1 }).eq('id', id);
+      const { data: sub, error: subError } = await supabase
+        .from('submissions')
+        .select('votes_count, submission_data')
+        .eq('id', id)
+        .single();
+
+      if (!subError && sub && typeof sub.votes_count === 'number') {
+        return supabase
+          .from('submissions')
+          .update({ votes_count: (sub.votes_count || 0) + 1 })
+          .eq('id', id);
+      }
+
+      const currentVotes = Number(sub?.submission_data?.votes || 0);
+      const nextSubmissionData = {
+        ...(sub?.submission_data || {}),
+        votes: currentVotes + 1,
+      };
+
+      return supabase
+        .from('submissions')
+        .update({ submission_data: nextSubmissionData })
+        .eq('id', id);
     }
 
     return { data, error };
