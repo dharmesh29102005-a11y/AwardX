@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { programPages } from '../../../services/supabase';
 import { sectionDefs, SectionPreview, DEFAULT_TEMPLATE } from './SectionBlocks';
 import { PropertyPanel } from './PropertyPanel';
-import { Save, Plus, GripVertical, Rocket, Eye, Monitor, Smartphone, Tablet, LayoutTemplate } from 'lucide-react';
+import { Save, Plus, GripVertical, Rocket, Eye, Monitor, Smartphone, Tablet, LayoutTemplate, Link2, Check } from 'lucide-react';
 import { Button } from '../../Button';
 
 interface PageBuilderProps {
@@ -14,8 +14,11 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
     const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [isPublishing, setIsPublishing] = useState(false);
     const [config, setConfig] = useState<any>(null);
     const [previewMode, setPreviewMode] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
+    const [isPublished, setIsPublished] = useState(false);
+    const [shareCopied, setShareCopied] = useState(false);
 
     useEffect(() => {
         loadData();
@@ -30,6 +33,7 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
             ]);
 
             setConfig(configRes.data || { theme_settings: {} });
+            setIsPublished(!!configRes.data?.is_published);
 
             // Auto-populate if empty
             if (!sectionsRes.data || sectionsRes.data.length === 0) {
@@ -114,29 +118,27 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
         setSections(reordered);
     };
 
+    const saveAll = async () => {
+        // 1. Save Config
+        await programPages.createOrUpdateConfig(programId, config);
+
+        // 2. Save Sections (temp IDs will be replaced by DB IDs)
+        const sectionsToSave = sections.map((s, index) => ({
+            ...s,
+            sort_order: index
+        }));
+
+        const savePromises = sectionsToSave.map(s => programPages.saveSection(s));
+        const results = await Promise.all(savePromises);
+        const newSectionsState = results.map(r => r.data).filter(Boolean);
+        setSections(newSectionsState);
+    };
+
     const handleSave = async () => {
+        if (isSaving || isPublishing) return;
         setIsSaving(true);
         try {
-            // 1. Save Config
-            await programPages.createOrUpdateConfig(programId, config);
-
-            // 2. Save Sections
-            // We need to save each section. For new ones (temp-), DB will generate ID.
-            // Ideally we should process them sequentially or in parallel.
-
-            // Note: Re-assign sort orders based on current array index
-            const sectionsToSave = sections.map((s, index) => ({
-                ...s,
-                sort_order: index
-            }));
-
-            const savePromises = sectionsToSave.map(s => programPages.saveSection(s));
-            const results = await Promise.all(savePromises);
-
-            // Update local state with returned data (especially for new IDs)
-            const newSectionsState = results.map(r => r.data).filter(Boolean);
-            setSections(newSectionsState);
-
+            await saveAll();
             alert('Changes saved successfully!');
         } catch (error) {
             console.error('Error saving:', error);
@@ -144,6 +146,53 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
         } finally {
             setIsSaving(false);
         }
+    };
+
+    const handlePublish = async () => {
+        if (isSaving || isPublishing) return;
+        setIsPublishing(true);
+        try {
+            await saveAll();
+
+            const publishPayload = {
+                ...(config || {}),
+                is_published: true,
+                published_at: new Date().toISOString(),
+            };
+
+            const { data, error } = await programPages.createOrUpdateConfig(programId, publishPayload);
+            if (error) {
+                throw error;
+            }
+
+            setConfig(data || publishPayload);
+            setIsPublished(true);
+            alert('Page published successfully!');
+        } catch (error) {
+            console.error('Error publishing:', error);
+            alert('Failed to publish page.');
+        } finally {
+            setIsPublishing(false);
+        }
+    };
+
+    const handleCopyShareLink = async () => {
+        const baseUrl = window.location.origin;
+        const shareUrl = `${baseUrl}/?page=program&id=${programId}`;
+
+        try {
+            await navigator.clipboard.writeText(shareUrl);
+        } catch (error) {
+            const textArea = document.createElement('textarea');
+            textArea.value = shareUrl;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+        }
+
+        setShareCopied(true);
+        setTimeout(() => setShareCopied(false), 2000);
     };
 
     if (isLoading) {
@@ -188,12 +237,25 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
                         <Eye className="w-4 h-4 mr-2" /> Live Preview
                     </Button>
 
-                    <Button onClick={handleSave} disabled={isSaving}>
+                    <Button variant="outline" onClick={handleCopyShareLink}>
+                        {shareCopied ? (
+                            <Check className="w-4 h-4 mr-2 text-emerald-600" />
+                        ) : (
+                            <Link2 className="w-4 h-4 mr-2" />
+                        )}
+                        {shareCopied ? 'Link Copied' : 'Copy Share Link'}
+                    </Button>
+
+                    <Button onClick={handleSave} disabled={isSaving || isPublishing}>
                         <Save className="w-4 h-4 mr-2" /> {isSaving ? 'Saving...' : 'Save Draft'}
                     </Button>
 
-                    <Button className="bg-green-600 hover:bg-green-700 text-white">
-                        <Rocket className="w-4 h-4 mr-2" /> Publish
+                    <Button
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                        onClick={handlePublish}
+                        disabled={isPublishing}
+                    >
+                        <Rocket className="w-4 h-4 mr-2" /> {isPublishing ? 'Publishing...' : (isPublished ? 'Published' : 'Publish')}
                     </Button>
                 </div>
             </div>

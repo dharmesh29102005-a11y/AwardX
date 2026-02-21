@@ -31,7 +31,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
       setRounds(loadedRounds);
 
       // Load edges from storage
-      const loadedEdges = scheduleRoundsService.getEdges(activeEvent.id);
+      const loadedEdges = await scheduleRoundsService.getEdges(activeEvent.id);
       setEdges(loadedEdges);
     } catch (error) {
       console.error('Failed to load workflow:', error);
@@ -99,7 +99,9 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
         const updated = prev.filter(e => e.sourceRoundId !== roundId && e.targetRoundId !== roundId);
         // Save updated edges
         if (activeEvent) {
-          scheduleRoundsService.saveEdges(activeEvent.id, updated);
+          void scheduleRoundsService.saveEdges(activeEvent.id, updated).then((persisted) => {
+            if (persisted.length) setEdges(persisted);
+          });
         }
         return updated;
       });
@@ -118,7 +120,9 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
       const updated = [...prev, edge];
       // Save to storage
       if (activeEvent) {
-        scheduleRoundsService.saveEdges(activeEvent.id, updated);
+        void scheduleRoundsService.saveEdges(activeEvent.id, updated).then((persisted) => {
+          if (persisted.length) setEdges(persisted);
+        });
       }
       return updated;
     });
@@ -129,7 +133,9 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
       const updated = prev.filter(e => e.id !== edgeId);
       // Save to storage
       if (activeEvent) {
-        scheduleRoundsService.saveEdges(activeEvent.id, updated);
+        void scheduleRoundsService.saveEdges(activeEvent.id, updated).then((persisted) => {
+          if (persisted.length) setEdges(persisted);
+        });
       }
       return updated;
     });
@@ -139,7 +145,9 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
     setEdges(prev => {
       const updated = prev.map(e => e.id === edge.id ? edge : e);
       if (activeEvent) {
-        scheduleRoundsService.saveEdges(activeEvent.id, updated);
+        void scheduleRoundsService.saveEdges(activeEvent.id, updated).then((persisted) => {
+          if (persisted.length) setEdges(persisted);
+        });
       }
       return updated;
     });

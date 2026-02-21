@@ -1,5 +1,5 @@
-import { rounds as supabaseRounds, getCurrentOrgId, supabase } from './supabase';
-import { Round, RoundEdge } from '../types/scheduleRounds';
+import { rounds as supabaseRounds, roundEdges as supabaseRoundEdges, supabase } from './supabase';
+import { Round, RoundEdge, EdgeCondition } from '../types/scheduleRounds';
 
 // Convert database round to scheduleRounds Round type
 export function dbRoundToScheduleRound(dbRound: any): Round {
@@ -120,13 +120,70 @@ function mapStatusToDb(status: Round['status']): string {
   return statusMap[status] || 'draft';
 }
 
-// Store edges in localStorage for now (can be moved to database later)
-// Key format: scheduleRounds_edges_{programId}
 const EDGES_STORAGE_PREFIX = 'scheduleRounds_edges_';
 
-export function getEdgesForProgram(programId: string): RoundEdge[] {
+type EdgeMetadata = {
+  sourceHandle?: string;
+  targetHandle?: string;
+  dataStream?: string;
+  name?: string;
+};
+
+const DEFAULT_EDGE_CONDITION: EdgeCondition = { type: 'always' };
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function extractCondition(raw: any): { condition: EdgeCondition; metadata: EdgeMetadata } {
+  if (!raw || typeof raw !== 'object') {
+    return { condition: DEFAULT_EDGE_CONDITION, metadata: {} };
+  }
+
+  const { metadata, ...rest } = raw as Record<string, any>;
+  const condition = typeof rest.type === 'string' ? (rest as EdgeCondition) : DEFAULT_EDGE_CONDITION;
+  return { condition, metadata: metadata || {} };
+}
+
+function dbEdgeToScheduleRoundEdge(dbEdge: any): RoundEdge {
+  const { condition, metadata } = extractCondition(dbEdge.condition);
+
+  return {
+    id: dbEdge.id,
+    programId: dbEdge.program_id,
+    sourceRoundId: dbEdge.source_round_id,
+    targetRoundId: dbEdge.target_round_id,
+    sourceHandle: metadata.sourceHandle,
+    targetHandle: metadata.targetHandle,
+    condition,
+    order: dbEdge.sort_order ?? 0,
+    dataStream: metadata.dataStream,
+    name: metadata.name,
+    createdAt: dbEdge.created_at || new Date().toISOString(),
+  };
+}
+
+function scheduleRoundEdgeToDb(edge: RoundEdge) {
+  const condition = edge.condition ? { ...edge.condition } : DEFAULT_EDGE_CONDITION;
+  const metadata: EdgeMetadata = {
+    sourceHandle: edge.sourceHandle,
+    targetHandle: edge.targetHandle,
+    dataStream: edge.dataStream,
+    name: edge.name,
+  };
+
+  return {
+    program_id: edge.programId,
+    source_round_id: edge.sourceRoundId,
+    target_round_id: edge.targetRoundId,
+    condition: { ...condition, metadata },
+    sort_order: edge.order ?? 0,
+  };
+}
+
+function loadEdgesFromLocalStorage(programId: string): RoundEdge[] {
   if (typeof window === 'undefined') return [];
-  
+
   try {
     const stored = localStorage.getItem(`${EDGES_STORAGE_PREFIX}${programId}`);
     return stored ? JSON.parse(stored) : [];
@@ -136,9 +193,9 @@ export function getEdgesForProgram(programId: string): RoundEdge[] {
   }
 }
 
-export function saveEdgesForProgram(programId: string, edges: RoundEdge[]): void {
+function saveEdgesToLocalStorage(programId: string, edges: RoundEdge[]): void {
   if (typeof window === 'undefined') return;
-  
+
   try {
     localStorage.setItem(`${EDGES_STORAGE_PREFIX}${programId}`, JSON.stringify(edges));
   } catch (error) {
@@ -245,13 +302,66 @@ export const scheduleRoundsService = {
   },
 
   // Get edges for a program
-  getEdges(programId: string): RoundEdge[] {
-    return getEdgesForProgram(programId);
+  async getEdges(programId: string): Promise<RoundEdge[]> {
+    if (!supabase) {
+      return loadEdgesFromLocalStorage(programId);
+    }
+
+    const { data, error } = await supabaseRoundEdges.getByProgram(programId);
+    if (error || !data) {
+      return loadEdgesFromLocalStorage(programId);
+    }
+
+    const mapped = data.map(dbEdgeToScheduleRoundEdge);
+    if (mapped.length === 0) {
+      const localEdges = loadEdgesFromLocalStorage(programId);
+      if (localEdges.length > 0) {
+        await this.saveEdges(programId, localEdges);
+        return localEdges;
+      }
+    }
+    return mapped;
   },
 
   // Save edges for a program
-  saveEdges(programId: string, edges: RoundEdge[]): void {
-    saveEdgesForProgram(programId, edges);
+  async saveEdges(programId: string, edges: RoundEdge[]): Promise<RoundEdge[]> {
+    if (!supabase) {
+      saveEdgesToLocalStorage(programId, edges);
+      return edges;
+    }
+
+    const { data: existingData, error: existingError } = await supabaseRoundEdges.getByProgram(programId);
+    if (existingError || !existingData) {
+      saveEdgesToLocalStorage(programId, edges);
+      return edges;
+    }
+
+    const incomingIds = new Set(edges.filter(e => isUuid(e.id)).map(e => e.id));
+    const deletions = existingData.filter(edge => !incomingIds.has(edge.id));
+
+    await Promise.all(
+      deletions.map(edge => supabaseRoundEdges.delete(edge.id))
+    );
+
+    const persisted: RoundEdge[] = [];
+
+    for (const edge of edges) {
+      const dbPayload = scheduleRoundEdgeToDb(edge);
+      if (isUuid(edge.id)) {
+        const { data, error } = await supabaseRoundEdges.update(edge.id, dbPayload);
+        if (!error && data) {
+          persisted.push(dbEdgeToScheduleRoundEdge(data));
+        }
+      } else {
+        const { data, error } = await supabaseRoundEdges.create(dbPayload);
+        if (!error && data) {
+          persisted.push(dbEdgeToScheduleRoundEdge(data));
+        }
+      }
+    }
+
+    saveEdgesToLocalStorage(programId, persisted);
+    return persisted.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   },
 };
 

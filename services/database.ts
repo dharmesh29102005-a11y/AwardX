@@ -575,6 +575,26 @@ class DatabaseService {
     }));
   }
 
+  async deleteCategory(categoryId: string): Promise<void> {
+    if (!supabase) throw new Error('Supabase not configured');
+
+    const { error } = await supabase
+      .from('categories')
+      .delete()
+      .eq('id', categoryId);
+
+    if (error) throw new Error(error.message || 'Failed to delete category');
+
+    await this.safeAuditLog({
+      action: 'Deleted category',
+      actionType: 'delete',
+      resourceType: 'category',
+      resourceId: categoryId,
+      details: `Category ${categoryId} deleted`,
+      metadata: { categoryId },
+    });
+  }
+
   async addCategory(category: Omit<Category, 'id' | 'entriesCount'>): Promise<Category> {
     if (!supabase) throw new Error('Supabase not configured');
 

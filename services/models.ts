@@ -137,6 +137,20 @@ export interface Log {
 }
 
 // Permission Definitions (must match `public.permissions.key` values)
+// Contact represents a user/contact record used in the header and other UI surfaces.
+export interface Contact {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  lastActive: string;
+  avatar: string;
+  source?: string;
+  surveyAnswer?: string;
+  joinedDate?: string;
+}
+
 export const PERMISSIONS = {
   VIEW_OVERVIEW: 'view_overview',
   MANAGE_PROGRAMS: 'manage_programs', // Schedule, Awards, Submission Setup

@@ -1,4 +1,6 @@
-const backendUrl = import.meta.env.VITE_BACKEND_URL || '';
+const envBackendUrl = (import.meta.env.VITE_BACKEND_URL || '').trim();
+const isLocalBackend = envBackendUrl.includes('localhost') || envBackendUrl.includes('127.0.0.1');
+const backendUrl = envBackendUrl && !isLocalBackend ? envBackendUrl : '';
 
 type TeamInvitePayload = {
   email: string;
@@ -16,7 +18,8 @@ type JudgeInvitePayload = {
 
 async function postJson(path: string, payload: Record<string, any>) {
   try {
-    await fetch(`${backendUrl}${path}`, {
+    const url = backendUrl ? `${backendUrl}${path}` : path;
+    await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

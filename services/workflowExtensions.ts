@@ -223,7 +223,7 @@ export async function applyWorkflowExtensionToProgram(opts: {
   });
 
   const nextEdges = [...existingEdges, ...createdEdges];
-  scheduleRoundsService.saveEdges(programId, nextEdges);
+  await scheduleRoundsService.saveEdges(programId, nextEdges);
 
   return { createdRounds: Array.from(templateToReal.values()), createdEdges };
 }

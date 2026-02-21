@@ -800,6 +800,69 @@ export const rounds = {
   },
 };
 
+// Round edges
+export const roundEdges = {
+  getByProgram: async (programId: string) => {
+    const orgId = await getCurrentOrgId();
+    if (!orgId) return { data: [], error: { message: 'Not authenticated' } };
+
+    // Verify program belongs to org
+    const { data: program } = await supabase
+      .from('programs')
+      .select('id')
+      .eq('id', programId)
+      .eq('organization_id', orgId)
+      .single();
+
+    if (!program) return { data: [], error: { message: 'Program not found' } };
+
+    const { data, error } = await supabase
+      .from('round_edges')
+      .select('*')
+      .eq('program_id', programId)
+      .order('sort_order');
+    return { data, error };
+  },
+
+  create: async (edge: {
+    program_id: string;
+    source_round_id: string;
+    target_round_id: string;
+    condition: any;
+    sort_order: number;
+  }) => {
+    const { data, error } = await supabase
+      .from('round_edges')
+      .insert(edge)
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  update: async (id: string, updates: Partial<{
+    source_round_id: string;
+    target_round_id: string;
+    condition: any;
+    sort_order: number;
+  }>) => {
+    const { data, error } = await supabase
+      .from('round_edges')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  delete: async (id: string) => {
+    const { error } = await supabase
+      .from('round_edges')
+      .delete()
+      .eq('id', id);
+    return { error };
+  },
+};
+
 // Submissions
 export const submissions = {
   getAll: async (filters?: {
