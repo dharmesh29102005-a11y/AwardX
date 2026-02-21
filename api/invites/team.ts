@@ -25,7 +25,7 @@ export default async function handler(req: any, res: any) {
 
   try {
     const { data, error: sendError } = await resend.emails.send({
-      from: process.env.RESEND_FROM || 'AwardX <no-reply@awardx.app>',
+      from: process.env.RESEND_FROM || 'AwardX <no-reply@awardx.one>',
       to: email,
       subject,
       text: `You have been invited to ${programTitle}.\n${roleLine}\n${inviteLine}`,

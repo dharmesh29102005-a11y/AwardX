@@ -36,7 +36,7 @@ app.post('/api/invites/team', async (req, res) => {
 
 	try {
 		const { data, error: sendError } = await resend.emails.send({
-			from: process.env.RESEND_FROM || 'AwardX <no-reply@awardx.app>',
+			from: process.env.RESEND_FROM || 'AwardX <no-reply@awardx.one>',
 			to: email,
 			subject,
 			text: `You have been invited to ${programTitle}.\n${roleLine}\n${inviteLine}`,
@@ -75,7 +75,7 @@ app.post('/api/invites/judge', async (req, res) => {
 
 	try {
 		const { data, error: sendError } = await resend.emails.send({
-			from: process.env.RESEND_FROM || 'AwardX <no-reply@awardx.app>',
+			from: process.env.RESEND_FROM || 'AwardX <no-reply@awardx.one>',
 			to: email,
 			subject,
 			text: `Hi ${name || 'Judge'},\nYou have been invited to judge ${programTitle}.\n${inviteLine}`,
