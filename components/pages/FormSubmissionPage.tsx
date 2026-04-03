@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { Button } from '../Button';
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -124,7 +125,7 @@ export const FormSubmissionPage: React.FC = () => {
         }
 
         if (!form.is_active) {
-          setIsError('This nomination form is not published yet.');
+          setIsError('Submissions are not yet open. Check back when the program is published.');
           setIsLoading(false);
           return;
         }
@@ -248,7 +249,7 @@ export const FormSubmissionPage: React.FC = () => {
 
   const handleNext = () => {
     if (!validatePage()) {
-      alert('Please fill in all required fields');
+      toast.error('Please fill in all required fields');
       return;
     }
     if (currentPageIdx < formPages.length - 1) {
@@ -264,13 +265,13 @@ export const FormSubmissionPage: React.FC = () => {
 
   const handleSubmit = async () => {
     if (!validatePage()) {
-      alert('Please fill in all required fields');
+      toast.error('Please fill in all required fields');
       return;
     }
 
     const currentFormId = formId || getFormIdFromUrl();
     if (!currentFormId) {
-      alert('Form ID is required');
+      toast.error('Form ID is required');
       return;
     }
 
@@ -368,7 +369,7 @@ export const FormSubmissionPage: React.FC = () => {
       setPaymentMessage(null);
     } catch (err: any) {
       console.error('Form submission error:', err);
-      alert('Failed to submit form: ' + (err.message || 'Unknown error'));
+      toast.error('Failed to submit form: ' + (err.message || 'Unknown error'));
     } finally {
       setIsSubmitting(false);
     }

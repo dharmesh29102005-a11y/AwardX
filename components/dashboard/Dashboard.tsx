@@ -21,6 +21,8 @@ import { Program } from '../../services/models';
 import { db as databaseService, workspaceState } from '../../services/database';
 import { auth } from '../../services/supabase';
 import { ErrorBoundary } from '../ErrorBoundary';
+import { PublishedLockBanner } from './PublishedLockBanner';
+import { ProgramTileHub } from './ProgramTileHub';
 
 const ScheduleRoundsView = lazy(() =>
   import('./scheduleRounds/ScheduleRoundsView').then((m) => ({ default: m.ScheduleRoundsView })),
@@ -117,6 +119,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
   const renderView = () => {
     switch (currentView) {
+      case 'tile-hub':
+        return <ProgramTileHub activeEvent={activeEvent} onNavigate={setCurrentView} />;
       case 'overview':
         return <DashboardOverview activeEvent={activeEvent} onNavigate={setCurrentView} />;
       case 'custom-grid':
@@ -133,11 +137,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           </Suspense>
         );
       case 'submission-setup':
-        return <SubmissionProcessView activeEvent={activeEvent} />;
+        return activeEvent?.status === 'Active'
+          ? <PublishedLockBanner program={activeEvent} sectionName="Submission Setup" />
+          : <SubmissionProcessView activeEvent={activeEvent} />;
       case 'awards':
         return <CategoriesView activeEvent={activeEvent} />;
       case 'templates':
-        return <FormBuilderView activeEvent={activeEvent} />;
+        return activeEvent?.status === 'Active'
+          ? <PublishedLockBanner program={activeEvent} sectionName="Form Builder" />
+          : <FormBuilderView activeEvent={activeEvent} />;
       case 'submissions':
         return <SubmissionTable activeEvent={activeEvent} />;
 
@@ -160,7 +168,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       case 'program-details':
         return <ProgramDetailsView activeEvent={activeEvent} />;
       default:
-        return activeEvent?.type === 'Other' ? <CustomGridView /> : <DashboardOverview activeEvent={activeEvent} />;
+        return activeEvent
+          ? <ProgramTileHub activeEvent={activeEvent} onNavigate={setCurrentView} />
+          : <DashboardOverview activeEvent={activeEvent} onNavigate={setCurrentView} />;
     }
   };
 
