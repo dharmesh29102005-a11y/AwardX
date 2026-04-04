@@ -648,7 +648,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     { id: 'builder',           label: 'Overview Page',      icon: Sparkles,        permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'program-details',   label: 'Program Details',    icon: Edit,            permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'schedule-rounds',   label: 'Schedule & Rounds',  icon: CalendarClock,   permission: PERMISSIONS.MANAGE_PROGRAMS },
-    { id: 'submission-setup',  label: 'Submission Process', icon: Settings2,       permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'submissions',       label: 'Submissions',        icon: FileText,        permission: PERMISSIONS.VIEW_SUBMISSIONS },
     { id: 'judging',           label: 'Judging',            icon: Gavel,           permission: PERMISSIONS.VIEW_JUDGING },
     { id: 'awards',            label: 'Awards',             icon: Trophy,          permission: PERMISSIONS.MANAGE_PROGRAMS },

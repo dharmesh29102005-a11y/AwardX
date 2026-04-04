@@ -97,8 +97,16 @@ export const cacheKeys = {
   org: (id: string) => `org:${id}`,
   program: (id: string) => `program:${id}`,
   programStats: (id: string) => `program:${id}:stats`,
+  programOverview: (id: string) => `program:${id}:overview`,
+  programRounds: (id: string) => `program:${id}:rounds`,
+  programRoundEdges: (id: string) => `program:${id}:round-edges`,
   programsByOrg: (organizationId: string) => `programs:org:${organizationId}`,
   programsAll: () => 'programs:all',
+  roundSubmissions: (roundId: string) => `round:${roundId}:submissions`,
+  votingConfig: (roundId: string) => `round:${roundId}:voting-config`,
+  votingResults: (roundId: string) => `round:${roundId}:voting-results`,
+  advancementHistory: (programId: string) => `program:${programId}:advancement-history`,
+  pipelineStatus: (programId: string) => `program:${programId}:pipeline-status`,
 };
 
 export async function getCache<T>(key: string): Promise<T | null> {

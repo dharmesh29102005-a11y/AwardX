@@ -220,6 +220,7 @@ export interface Database {
           created_at: string
           updated_at: string
           created_by: string | null
+          active_form_id: string | null
         }
         Insert: {
           id?: string
@@ -238,6 +239,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
           created_by?: string | null
+          active_form_id?: string | null
         }
         Update: {
           id?: string
@@ -256,6 +258,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
           created_by?: string | null
+          active_form_id?: string | null
         }
       }
       program_payment_configs: {
@@ -358,6 +361,9 @@ export interface Database {
           status: string
           sort_order: number
           settings: Json
+          advancement_criteria: Json
+          advancement_trigger: string
+          is_finalized: boolean
           created_at: string
         }
         Insert: {
@@ -371,6 +377,9 @@ export interface Database {
           status?: string
           sort_order?: number
           settings?: Json
+          advancement_criteria?: Json
+          advancement_trigger?: string
+          is_finalized?: boolean
           created_at?: string
         }
         Update: {
@@ -384,6 +393,176 @@ export interface Database {
           status?: string
           sort_order?: number
           settings?: Json
+          advancement_criteria?: Json
+          advancement_trigger?: string
+          is_finalized?: boolean
+          created_at?: string
+        }
+      }
+      round_submissions: {
+        Row: {
+          id: string
+          round_id: string
+          submission_id: string
+          status: string
+          enrolled_at: string
+          advanced_at: string | null
+          eliminated_at: string | null
+          elimination_reason: string | null
+          source_round_id: string | null
+          carried_score: number | null
+          metadata: Json
+        }
+        Insert: {
+          id?: string
+          round_id: string
+          submission_id: string
+          status?: string
+          enrolled_at?: string
+          advanced_at?: string | null
+          eliminated_at?: string | null
+          elimination_reason?: string | null
+          source_round_id?: string | null
+          carried_score?: number | null
+          metadata?: Json
+        }
+        Update: {
+          id?: string
+          round_id?: string
+          submission_id?: string
+          status?: string
+          enrolled_at?: string
+          advanced_at?: string | null
+          eliminated_at?: string | null
+          elimination_reason?: string | null
+          source_round_id?: string | null
+          carried_score?: number | null
+          metadata?: Json
+        }
+      }
+      voting_configs: {
+        Row: {
+          id: string
+          round_id: string
+          votes_per_user: number
+          votes_per_submission: number
+          require_auth: boolean
+          allow_anonymous: boolean
+          show_results_publicly: boolean
+          show_leaderboard: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          round_id: string
+          votes_per_user?: number
+          votes_per_submission?: number
+          require_auth?: boolean
+          allow_anonymous?: boolean
+          show_results_publicly?: boolean
+          show_leaderboard?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          round_id?: string
+          votes_per_user?: number
+          votes_per_submission?: number
+          require_auth?: boolean
+          allow_anonymous?: boolean
+          show_results_publicly?: boolean
+          show_leaderboard?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      advancement_events: {
+        Row: {
+          id: string
+          round_id: string
+          target_round_id: string | null
+          trigger_type: string
+          criteria_used: Json
+          total_participants: number
+          advanced_count: number
+          eliminated_count: number
+          had_ties: boolean
+          tie_resolution: Json | null
+          executed_by: string | null
+          executed_at: string
+          status: string
+          metadata: Json
+        }
+        Insert: {
+          id?: string
+          round_id: string
+          target_round_id?: string | null
+          trigger_type: string
+          criteria_used: Json
+          total_participants: number
+          advanced_count: number
+          eliminated_count: number
+          had_ties?: boolean
+          tie_resolution?: Json | null
+          executed_by?: string | null
+          executed_at?: string
+          status?: string
+          metadata?: Json
+        }
+        Update: {
+          id?: string
+          round_id?: string
+          target_round_id?: string | null
+          trigger_type?: string
+          criteria_used?: Json
+          total_participants?: number
+          advanced_count?: number
+          eliminated_count?: number
+          had_ties?: boolean
+          tie_resolution?: Json | null
+          executed_by?: string | null
+          executed_at?: string
+          status?: string
+          metadata?: Json
+        }
+      }
+      advancement_details: {
+        Row: {
+          id: string
+          advancement_event_id: string
+          submission_id: string
+          outcome: string
+          rank: number | null
+          score: number | null
+          vote_count: number | null
+          was_at_cutoff_boundary: boolean
+          override_reason: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          advancement_event_id: string
+          submission_id: string
+          outcome: string
+          rank?: number | null
+          score?: number | null
+          vote_count?: number | null
+          was_at_cutoff_boundary?: boolean
+          override_reason?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          advancement_event_id?: string
+          submission_id?: string
+          outcome?: string
+          rank?: number | null
+          score?: number | null
+          vote_count?: number | null
+          was_at_cutoff_boundary?: boolean
+          override_reason?: string | null
           created_at?: string
         }
       }
@@ -569,6 +748,7 @@ export interface Database {
           assigned_by: string | null
           status: string
           completed_at: string | null
+          round_id: string | null
         }
         Insert: {
           id?: string
@@ -578,6 +758,7 @@ export interface Database {
           assigned_by?: string | null
           status?: string
           completed_at?: string | null
+          round_id?: string | null
         }
         Update: {
           id?: string
@@ -587,6 +768,7 @@ export interface Database {
           assigned_by?: string | null
           status?: string
           completed_at?: string | null
+          round_id?: string | null
         }
       }
       scores: {
@@ -1394,6 +1576,11 @@ export type UseCase = Tables<'use_cases'>
 export type FAQ = Tables<'faqs'>
 export type CaseStudy = Tables<'case_studies'>
 export type ProgramTemplate = Tables<'program_templates'>
+
+export type RoundSubmission = Tables<'round_submissions'>
+export type VotingConfig = Tables<'voting_configs'>
+export type AdvancementEvent = Tables<'advancement_events'>
+export type AdvancementDetail = Tables<'advancement_details'>
 
 // View types
 export type SubmissionDetail = Views<'submission_details'>

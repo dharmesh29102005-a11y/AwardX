@@ -16,6 +16,8 @@ interface JudgeScoringModalProps {
   /** The submission_judges row id linking this judge to this submission */
   submissionJudgeId?: string;
   onScored?: () => void;
+  /** If true, only show this judge's scores (judge portal mode) */
+  isJudgeView?: boolean;
 }
 
 // Renders submitted form data from the submission_data jsonb field
@@ -83,6 +85,7 @@ export const JudgeScoringModal: React.FC<JudgeScoringModalProps> = ({
   criteria,
   submissionJudgeId,
   onScored,
+  isJudgeView = false,
 }) => {
   const queryClient = useQueryClient();
   const [scores, setScores] = useState<Record<string, number>>({});
@@ -111,9 +114,9 @@ export const JudgeScoringModal: React.FC<JudgeScoringModalProps> = ({
   });
 
   const submitMutation = useMutation({
-    mutationFn: (criteriaScores: CriterionScore[]) => {
+    mutationFn: (payload: { criteriaScores: CriterionScore[]; overallComment?: string }) => {
       if (!submissionJudgeId) throw new Error('No judge assignment found');
-      return db.submitScores(submissionJudgeId, criteriaScores);
+      return db.submitScores(submissionJudgeId, payload.criteriaScores, payload.overallComment);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.judging.scores(submission?.id ?? '') });
@@ -135,7 +138,8 @@ export const JudgeScoringModal: React.FC<JudgeScoringModalProps> = ({
       score: scores[c.id] ?? c.minScore,
       comment: comments[c.id] || undefined,
     }));
-    submitMutation.mutate(criteriaScores);
+    // Pass overall comment to submitScores
+    submitMutation.mutate({ criteriaScores, overallComment });
   };
 
   // Weighted total calculation
@@ -158,7 +162,9 @@ export const JudgeScoringModal: React.FC<JudgeScoringModalProps> = ({
           <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
             <FileText className="w-4 h-4 text-slate-500" />
             <span className="text-sm font-semibold text-slate-700">Submitted Entry</span>
-            <span className="ml-auto text-xs text-slate-400">{submission.applicant} · {submission.date}</span>
+            <span className="ml-auto text-xs text-slate-400">
+              {(submission.applicant || submission.applicantName || 'Unknown')} · {(submission.date || submission.submittedAt ? new Date(submission.date || submission.submittedAt!).toLocaleDateString() : 'N/A')}
+            </span>
           </div>
 
           {/* Entry meta */}
@@ -169,8 +175,8 @@ export const JudgeScoringModal: React.FC<JudgeScoringModalProps> = ({
 
           <FormDataViewer submissionData={submission.submissionData as Record<string, unknown> ?? {}} />
 
-          {/* Existing scores from other judges (admin view) */}
-          {existingScores.length > 0 && (
+          {/* Existing scores from other judges (admin view only) */}
+          {!isJudgeView && existingScores.length > 0 && (
             <div className="px-6 pb-6">
               <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
                 Previous Scores ({existingScores.length} judge{existingScores.length > 1 ? 's' : ''})

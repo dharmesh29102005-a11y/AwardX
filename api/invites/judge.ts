@@ -41,7 +41,7 @@ export default async function handler(req: any, res: any) {
       from: process.env.RESEND_FROM || 'AwardX <no-reply@awardx.one>',
       to: email,
       subject,
-      text: `Hi ${judgeName},\n\nYou have been invited to judge "${programTitle}".\n\nClick the link below to access your judging portal and view the shortlisted submissions:\n${actionUrl}\n\nIMPORTANT: This is a one-time link. It will expire after you click it.\n\nBest,\nThe AwardX team`,
+      text: `Hi ${judgeName},\n\nYou have been invited to judge "${programTitle}".\n\nClick the link below to access your judging portal and view the assigned submissions:\n${actionUrl}\n\nIMPORTANT: This is a one-time link for security. After you click it, you'll be able to bookmark the portal page to return later.\n\nBest,\nThe AwardX team`,
       html: `<!doctype html>
 <html>
   <head>
@@ -68,17 +68,17 @@ export default async function handler(req: any, res: any) {
                 <p style="margin:0 0 24px;font-size:15px;color:#64748b;line-height:1.5;">for <strong style="color:#4f46e5;">${programTitle}</strong></p>
 
                 <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#334155;">Hi ${judgeName},</p>
-                <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#334155;">You've been selected as a judge for <strong>${programTitle}</strong>. Click the button below to access your judging portal where you can review the shortlisted submissions and provide your scores.</p>
+                <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#334155;">You've been selected as a judge for <strong>${programTitle}</strong>. Click the button below to access your judging portal where you can review the assigned submissions and provide your scores.</p>
 
                 <!-- CTA Button -->
                 <div style="text-align:center;margin:32px 0;">
                   <a href="${actionUrl}" style="background:#4f46e5;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;padding:14px 32px;border-radius:8px;display:inline-block;box-shadow:0 2px 4px rgba(79,70,229,0.3);">Access Judging Portal</a>
                 </div>
 
-                <!-- One-time notice -->
+                <!-- One-time & bookmark notice -->
                 <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:12px 16px;margin:24px 0;">
                   <p style="margin:0;font-size:13px;color:#92400e;line-height:1.5;">
-                    <strong>&#9888; One-time link:</strong> This link will expire after you click it. Please make sure to bookmark or save the portal page once opened.
+                    <strong>🔐 One-time link:</strong> For security, this link can only be used once. After you click it, you can bookmark the portal page to return anytime during the judging period.
                   </p>
                 </div>
 

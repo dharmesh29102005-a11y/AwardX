@@ -769,3 +769,70 @@ CREATE TABLE public.winner_announcements (
   CONSTRAINT winner_announcements_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id),
   CONSTRAINT winner_announcements_announced_by_fkey FOREIGN KEY (announced_by) REFERENCES public.profiles(id)
 );
+CREATE TABLE public.round_submissions (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  round_id uuid NOT NULL,
+  submission_id uuid NOT NULL,
+  status character varying DEFAULT 'active'::character varying,
+  enrolled_at timestamp with time zone DEFAULT now(),
+  advanced_at timestamp with time zone,
+  eliminated_at timestamp with time zone,
+  elimination_reason text,
+  source_round_id uuid,
+  carried_score numeric,
+  metadata jsonb DEFAULT '{}'::jsonb,
+  CONSTRAINT round_submissions_pkey PRIMARY KEY (id),
+  CONSTRAINT round_submissions_unique UNIQUE (round_id, submission_id),
+  CONSTRAINT round_submissions_round_id_fkey FOREIGN KEY (round_id) REFERENCES public.rounds(id) ON DELETE CASCADE,
+  CONSTRAINT round_submissions_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id) ON DELETE CASCADE,
+  CONSTRAINT round_submissions_source_round_id_fkey FOREIGN KEY (source_round_id) REFERENCES public.rounds(id)
+);
+CREATE TABLE public.voting_configs (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  round_id uuid NOT NULL UNIQUE,
+  votes_per_user integer DEFAULT 1,
+  votes_per_submission integer DEFAULT 1,
+  require_auth boolean DEFAULT false,
+  allow_anonymous boolean DEFAULT true,
+  show_results_publicly boolean DEFAULT false,
+  show_leaderboard boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT voting_configs_pkey PRIMARY KEY (id),
+  CONSTRAINT voting_configs_round_id_fkey FOREIGN KEY (round_id) REFERENCES public.rounds(id) ON DELETE CASCADE
+);
+CREATE TABLE public.advancement_events (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  round_id uuid NOT NULL,
+  target_round_id uuid,
+  trigger_type character varying NOT NULL,
+  criteria_used jsonb NOT NULL,
+  total_participants integer NOT NULL,
+  advanced_count integer NOT NULL,
+  eliminated_count integer NOT NULL,
+  had_ties boolean DEFAULT false,
+  tie_resolution jsonb,
+  executed_by uuid,
+  executed_at timestamp with time zone DEFAULT now(),
+  status character varying DEFAULT 'completed'::character varying,
+  metadata jsonb DEFAULT '{}'::jsonb,
+  CONSTRAINT advancement_events_pkey PRIMARY KEY (id),
+  CONSTRAINT advancement_events_round_id_fkey FOREIGN KEY (round_id) REFERENCES public.rounds(id),
+  CONSTRAINT advancement_events_target_round_id_fkey FOREIGN KEY (target_round_id) REFERENCES public.rounds(id),
+  CONSTRAINT advancement_events_executed_by_fkey FOREIGN KEY (executed_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.advancement_details (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  advancement_event_id uuid NOT NULL,
+  submission_id uuid NOT NULL,
+  outcome character varying NOT NULL,
+  rank integer,
+  score numeric,
+  vote_count integer,
+  was_at_cutoff_boundary boolean DEFAULT false,
+  override_reason text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT advancement_details_pkey PRIMARY KEY (id),
+  CONSTRAINT advancement_details_event_id_fkey FOREIGN KEY (advancement_event_id) REFERENCES public.advancement_events(id) ON DELETE CASCADE,
+  CONSTRAINT advancement_details_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id)
+);

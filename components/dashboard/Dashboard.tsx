@@ -158,10 +158,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             <ScheduleRoundsView activeEvent={activeEvent} />
           </Suspense>
         );
-      case 'submission-setup':
-        return activeEvent?.status === 'Active'
-          ? <PublishedLockBanner program={activeEvent} sectionName="Submission Setup" />
-          : <SubmissionProcessView activeEvent={activeEvent} />;
+
       case 'awards':
         return <CategoriesView activeEvent={activeEvent} />;
       case 'templates':
@@ -231,7 +228,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       onSelectProgram={setActiveEvent}
       onLogout={onLogout}
       onSwitchEvent={() => setActiveEvent(null)}
-      noPadding={currentView === 'awards' || currentView === 'templates' || currentView === 'submission-setup' || currentView === 'schedule-rounds' || currentView === 'builder' || currentView === 'program-details'}
+      noPadding={currentView === 'awards' || currentView === 'templates' || currentView === 'schedule-rounds' || currentView === 'builder' || currentView === 'program-details'}
       hideHeader={currentView === 'builder'}
     >
       <motion.div

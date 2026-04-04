@@ -118,6 +118,15 @@ export interface RoundWorkflow {
   updatedAt: string;
 }
 
+export type AdvancementCriteria =
+  | { type: 'top_n'; value: number }
+  | { type: 'top_percent'; value: number }
+  | { type: 'score_threshold'; value: number }
+  | { type: 'manual' }
+  | { type: 'all_pass' };
+
+export type AdvancementTrigger = 'manual' | 'automatic';
+
 export interface RoundAuditLog {
   id: string;
   programId: string;

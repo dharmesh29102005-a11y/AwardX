@@ -13,6 +13,9 @@ import {
   team,
   settings,
   forms,
+  roundSubmissions,
+  votingConfigs,
+  advancement,
 } from './supabase';
 import { getCurrentOrgId, getCurrentUserId } from './supabase';
 import { Program, Category, Round, Submission, Judge, Role, Log, SocialAccount, ScheduledPost, TeamMember } from './models';
@@ -1845,6 +1848,15 @@ class DatabaseService {
       metadata: { formId, programId: form.program_id },
     });
 
+    // Auto-enroll submission in the first round of the pipeline
+    const submissionId = (data as any).id;
+    try {
+      await this.enrollSubmissionInFirstRound(form.program_id, submissionId);
+    } catch (e) {
+      // Non-fatal: submission was created but pipeline enrollment failed
+      console.warn('[pipeline] Failed to auto-enroll submission in first round:', e);
+    }
+
     return data;
   }
 
@@ -1976,8 +1988,11 @@ class DatabaseService {
   async submitScores(
     submissionJudgeId: string,
     criteriaScores: { criterionId: string; score: number; comment?: string }[],
+    overallComment?: string,
   ): Promise<void> {
     if (!supabase) throw new Error('Supabase not configured');
+    
+    // 1. Save individual criterion scores
     const rows = criteriaScores.map(cs => ({
       submission_judge_id: submissionJudgeId,
       criterion_id: cs.criterionId,
@@ -1985,10 +2000,33 @@ class DatabaseService {
       comment: cs.comment || null,
       scored_at: new Date().toISOString(),
     }));
-    const { error } = await supabase
+    const { error: scoresError } = await supabase
       .from('scores')
       .upsert(rows, { onConflict: 'submission_judge_id,criterion_id' });
-    if (error) throw new Error(error.message || 'Failed to submit scores');
+    if (scoresError) throw new Error(scoresError.message || 'Failed to submit scores');
+
+    // 2. Save overall comment if provided
+    if (overallComment) {
+      const { error: commentError } = await supabase
+        .from('judge_comments')
+        .upsert({
+          submission_judge_id: submissionJudgeId,
+          overall_comment: overallComment,
+          submitted_at: new Date().toISOString(),
+        }, { onConflict: 'submission_judge_id' });
+      if (commentError) console.warn('Failed to save overall comment:', commentError);
+    }
+
+    // 3. Mark submission_judge as completed
+    const { error: updateError } = await supabase
+      .from('submission_judges')
+      .update({
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+      })
+      .eq('id', submissionJudgeId);
+    if (updateError) console.warn('Failed to update assignment status:', updateError);
+
     await this.safeAuditLog({
       action: 'Submitted judging scores',
       actionType: 'create',
@@ -2053,6 +2091,105 @@ class DatabaseService {
       resourceType: 'organization_member',
       resourceId: memberId,
     });
+  }
+
+  // ========================================================================
+  // ROUND PIPELINE — Form-to-Round Enrollment
+  // ========================================================================
+
+  /**
+   * Find the root round (no incoming edges) for a program and enroll a submission.
+   */
+  async enrollSubmissionInFirstRound(programId: string, submissionId: string) {
+    if (!supabase) return;
+
+    // Get all rounds for the program
+    const { data: allRounds } = await supabase
+      .from('rounds')
+      .select('id')
+      .eq('program_id', programId);
+    if (!allRounds || allRounds.length === 0) return;
+
+    // Get all edges to find which rounds are targets (have incoming edges)
+    const { data: edges } = await supabase
+      .from('round_edges')
+      .select('target_round_id')
+      .eq('program_id', programId);
+
+    const targetIds = new Set((edges || []).map(e => e.target_round_id));
+    // Root rounds = rounds with no incoming edges
+    const rootRounds = allRounds.filter(r => !targetIds.has(r.id));
+
+    if (rootRounds.length === 0) return;
+
+    // Enroll in the first root round (typically the nomination/submission round)
+    await roundSubmissions.enroll(rootRounds[0].id, submissionId);
+  }
+
+  async getActiveFormForProgram(programId: string): Promise<string | null> {
+    if (!supabase) return null;
+    const { data } = await supabase
+      .from('programs')
+      .select('active_form_id')
+      .eq('id', programId)
+      .single();
+    return data?.active_form_id || null;
+  }
+
+  async setActiveFormForProgram(programId: string, formId: string | null) {
+    if (!supabase) throw new Error('Supabase not configured');
+    const { error } = await supabase
+      .from('programs')
+      .update({ active_form_id: formId })
+      .eq('id', programId);
+    if (error) throw new Error(error.message || 'Failed to set active form');
+    await this.safeAuditLog({
+      action: formId ? 'Set active form' : 'Cleared active form',
+      actionType: 'update',
+      resourceType: 'program',
+      resourceId: programId,
+      metadata: { formId },
+    });
+  }
+
+  // ========================================================================
+  // ROUND SUBMISSIONS — Query helpers
+  // ========================================================================
+
+  async getRoundSubmissions(roundId: string) {
+    return roundSubmissions.getByRound(roundId);
+  }
+
+  async getRoundSubmissionCounts(roundId: string) {
+    return roundSubmissions.countByRound(roundId);
+  }
+
+  async getSubmissionRoundHistory(submissionId: string) {
+    return roundSubmissions.getBySubmission(submissionId);
+  }
+
+  // ========================================================================
+  // VOTING CONFIGS
+  // ========================================================================
+
+  async getVotingConfig(roundId: string) {
+    return votingConfigs.getByRound(roundId);
+  }
+
+  async saveVotingConfig(config: Parameters<typeof votingConfigs.upsert>[0]) {
+    return votingConfigs.upsert(config);
+  }
+
+  // ========================================================================
+  // ADVANCEMENT
+  // ========================================================================
+
+  async getAdvancementHistory(programId: string) {
+    return advancement.getEventsByProgram(programId);
+  }
+
+  async getAdvancementEventsByRound(roundId: string) {
+    return advancement.getEventsByRound(roundId);
   }
 
   hasPermission(permission: string): boolean {

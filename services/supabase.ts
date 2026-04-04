@@ -1754,8 +1754,10 @@ export const team = {
       .select('*')
       .eq('organization_id', orgId)
       .order('joined_at', { ascending: false });
+    
+    // Include both program-specific members AND organization-wide members (where program_id is NULL)
     if (programId) {
-      memberQuery = memberQuery.eq('program_id', programId);
+      memberQuery = memberQuery.or(`program_id.eq.${programId},program_id.is.null`);
     }
     const { data: memberRows, error } = await memberQuery;
 
@@ -2595,6 +2597,207 @@ export const programPages = {
   deleteMilestone: async (id: string) => {
     const { error } = await supabase.from('program_timeline_milestones').delete().eq('id', id);
     return { error };
+  },
+};
+
+// ============================================================================
+// ROUND SUBMISSIONS (Pipeline enrollment)
+// ============================================================================
+
+export const roundSubmissions = {
+  getByRound: async (roundId: string) => {
+    if (!supabase) return { data: [], error: null };
+    const { data, error } = await supabase
+      .from('round_submissions')
+      .select(`
+        *,
+        submissions(id, title, description, cover_image_url, status, average_score, votes_count, applicant_name, applicant_email, category_id, submission_data)
+      `)
+      .eq('round_id', roundId)
+      .order('enrolled_at', { ascending: true });
+    return { data, error };
+  },
+
+  getBySubmission: async (submissionId: string) => {
+    if (!supabase) return { data: [], error: null };
+    const { data, error } = await supabase
+      .from('round_submissions')
+      .select(`*, rounds(id, title, type, status)`)
+      .eq('submission_id', submissionId)
+      .order('enrolled_at', { ascending: true });
+    return { data, error };
+  },
+
+  enroll: async (roundId: string, submissionId: string, sourceRoundId?: string, carriedScore?: number) => {
+    if (!supabase) return { data: null, error: { message: 'Supabase not configured' } };
+    const { data, error } = await supabase
+      .from('round_submissions')
+      .upsert({
+        round_id: roundId,
+        submission_id: submissionId,
+        status: 'active',
+        source_round_id: sourceRoundId || null,
+        carried_score: carriedScore ?? null,
+      }, { onConflict: 'round_id,submission_id' })
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  enrollBulk: async (entries: Array<{ round_id: string; submission_id: string; source_round_id?: string; carried_score?: number }>) => {
+    if (!supabase) return { data: null, error: { message: 'Supabase not configured' } };
+    const rows = entries.map(e => ({
+      round_id: e.round_id,
+      submission_id: e.submission_id,
+      status: 'active',
+      source_round_id: e.source_round_id || null,
+      carried_score: e.carried_score ?? null,
+    }));
+    const { data, error } = await supabase
+      .from('round_submissions')
+      .upsert(rows, { onConflict: 'round_id,submission_id' })
+      .select();
+    return { data, error };
+  },
+
+  updateStatus: async (roundId: string, submissionId: string, status: string, reason?: string) => {
+    if (!supabase) return { data: null, error: { message: 'Supabase not configured' } };
+    const updates: Record<string, any> = { status };
+    if (status === 'advanced') updates.advanced_at = new Date().toISOString();
+    if (status === 'eliminated') {
+      updates.eliminated_at = new Date().toISOString();
+      if (reason) updates.elimination_reason = reason;
+    }
+    const { data, error } = await supabase
+      .from('round_submissions')
+      .update(updates)
+      .eq('round_id', roundId)
+      .eq('submission_id', submissionId)
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  countByRound: async (roundId: string) => {
+    if (!supabase) return { total: 0, active: 0, advanced: 0, eliminated: 0 };
+    const { data, error } = await supabase
+      .from('round_submissions')
+      .select('status')
+      .eq('round_id', roundId);
+    if (error || !data) return { total: 0, active: 0, advanced: 0, eliminated: 0 };
+    return {
+      total: data.length,
+      active: data.filter(r => r.status === 'active').length,
+      advanced: data.filter(r => r.status === 'advanced').length,
+      eliminated: data.filter(r => r.status === 'eliminated').length,
+    };
+  },
+};
+
+// ============================================================================
+// VOTING CONFIGS
+// ============================================================================
+
+export const votingConfigs = {
+  getByRound: async (roundId: string) => {
+    if (!supabase) return { data: null, error: null };
+    const { data, error } = await supabase
+      .from('voting_configs')
+      .select('*')
+      .eq('round_id', roundId)
+      .single();
+    return { data, error };
+  },
+
+  upsert: async (config: {
+    round_id: string;
+    votes_per_user?: number;
+    votes_per_submission?: number;
+    require_auth?: boolean;
+    allow_anonymous?: boolean;
+    show_results_publicly?: boolean;
+    show_leaderboard?: boolean;
+  }) => {
+    if (!supabase) return { data: null, error: { message: 'Supabase not configured' } };
+    const { data, error } = await supabase
+      .from('voting_configs')
+      .upsert({ ...config, updated_at: new Date().toISOString() }, { onConflict: 'round_id' })
+      .select()
+      .single();
+    return { data, error };
+  },
+};
+
+// ============================================================================
+// ADVANCEMENT
+// ============================================================================
+
+export const advancement = {
+  createEvent: async (event: {
+    round_id: string;
+    target_round_id?: string;
+    trigger_type: string;
+    criteria_used: any;
+    total_participants: number;
+    advanced_count: number;
+    eliminated_count: number;
+    had_ties?: boolean;
+    tie_resolution?: any;
+    executed_by?: string;
+    status?: string;
+  }) => {
+    if (!supabase) return { data: null, error: { message: 'Supabase not configured' } };
+    const { data, error } = await supabase
+      .from('advancement_events')
+      .insert(event)
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  createDetails: async (details: Array<{
+    advancement_event_id: string;
+    submission_id: string;
+    outcome: string;
+    rank?: number;
+    score?: number;
+    vote_count?: number;
+    was_at_cutoff_boundary?: boolean;
+    override_reason?: string;
+  }>) => {
+    if (!supabase) return { data: null, error: { message: 'Supabase not configured' } };
+    const { data, error } = await supabase
+      .from('advancement_details')
+      .insert(details)
+      .select();
+    return { data, error };
+  },
+
+  getEventsByRound: async (roundId: string) => {
+    if (!supabase) return { data: [], error: null };
+    const { data, error } = await supabase
+      .from('advancement_events')
+      .select(`*, advancement_details(*)`)
+      .eq('round_id', roundId)
+      .order('executed_at', { ascending: false });
+    return { data, error };
+  },
+
+  getEventsByProgram: async (programId: string) => {
+    if (!supabase) return { data: [], error: null };
+    // Get all rounds for this program, then their advancement events
+    const { data: roundsData } = await supabase
+      .from('rounds')
+      .select('id')
+      .eq('program_id', programId);
+    if (!roundsData || roundsData.length === 0) return { data: [], error: null };
+    const roundIds = roundsData.map(r => r.id);
+    const { data, error } = await supabase
+      .from('advancement_events')
+      .select(`*, advancement_details(*), rounds!advancement_events_round_id_fkey(title)`)
+      .in('round_id', roundIds)
+      .order('executed_at', { ascending: false });
+    return { data, error };
   },
 };
 

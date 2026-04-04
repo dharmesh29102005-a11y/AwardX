@@ -26,7 +26,8 @@ export default async function handler(req: any, res: any) {
 
   const resendApiKey = process.env.RESEND_API_KEY || '';
   if (!resendApiKey) {
-    res.status(500).json({ error: 'RESEND_API_KEY not configured' });
+    console.error('RESEND_API_KEY is not configured');
+    res.status(500).json({ error: 'Email service is not configured. Please contact support.' });
     return;
   }
 
@@ -49,14 +50,15 @@ export default async function handler(req: any, res: any) {
     });
 
     if (sendError) {
-      console.error('Resend error:', sendError);
-      res.status(500).json({ error: sendError.message || 'Resend rejected the email' });
+      console.error('Resend API error:', sendError);
+      res.status(500).json({ error: `Email service error: ${sendError.message || 'Resend rejected the email'}` });
       return;
     }
 
     res.json({ ok: true, id: data?.id });
   } catch (error: any) {
     console.error('Team invite error:', error);
-    res.status(500).json({ error: error?.message || 'Failed to send invite' });
+    const errorMessage = error?.message || 'Failed to send invite';
+    res.status(500).json({ error: `Email service error: ${errorMessage}` });
   }
 }

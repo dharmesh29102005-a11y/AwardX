@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { Resend } from 'resend';
 import apiRoutes from './routes/index.js';
 import { getCacheStatus } from './cache/redisCache.js';
+import { startRoundScheduler } from './jobs/roundScheduler.js';
 
 dotenv.config();
 
@@ -154,4 +155,6 @@ app.listen(port, () => {
 			`[cache] enabled=${cacheStatus.enabled} configured=${cacheStatus.configured} available=${cacheStatus.available} namespace=${cacheStatus.namespace}`,
 		);
 	}
+	// Start the round scheduler for auto-activation/completion
+	startRoundScheduler();
 });

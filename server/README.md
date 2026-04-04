@@ -82,12 +82,35 @@ npm start
 - `DELETE /api/programs/:id` - Delete program
 - `GET /api/programs/:id/stats` - Get program statistics
 
+### Overview Page
+- `GET /api/overview/:programId` - Get full overview page payload (config, sections, sponsors, faqs, timeline)
+- `PUT /api/overview/:programId/config` - Upsert page config
+- `POST /api/overview/:programId/sections` - Upsert section
+- `DELETE /api/overview/:programId/sections/:id` - Delete section
+- `POST /api/overview/:programId/sponsors` - Upsert sponsor
+- `DELETE /api/overview/:programId/sponsors/:id` - Delete sponsor
+- `POST /api/overview/:programId/faqs` - Upsert FAQ
+- `DELETE /api/overview/:programId/faqs/:id` - Delete FAQ
+- `POST /api/overview/:programId/timeline` - Upsert timeline milestone
+- `DELETE /api/overview/:programId/timeline/:id` - Delete timeline milestone
+
+### Schedule & Rounds
+- `GET /api/schedule-rounds/:programId/rounds` - Get rounds for program
+- `GET /api/schedule-rounds/:programId/edges` - Get round graph edges
+- `POST /api/schedule-rounds/:programId/rounds` - Create round
+- `PUT /api/schedule-rounds/:programId/rounds/:id` - Update round
+- `DELETE /api/schedule-rounds/:programId/rounds/:id` - Delete round
+- `PUT /api/schedule-rounds/:programId/edges` - Replace edges set
+
 ### Caching
 - Redis caching is applied only to read endpoints for organizations/programs/stats.
 - Cache key examples:
    - `awardx:org:{id}`
    - `awardx:program:{id}`
    - `awardx:program:{id}:stats`
+   - `awardx:program:{id}:overview`
+   - `awardx:program:{id}:rounds`
+   - `awardx:program:{id}:round-edges`
    - `awardx:programs:org:{organizationId}`
 - TTL defaults:
    - `short` (60s): fast-changing stats

@@ -129,34 +129,80 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
     // ── Mutations ─────────────────────────────────────────────────────────────
     const inviteMutation = useMutation({
         mutationFn: async (vars: { email: string; roleId: string }) => {
+            console.log('Invite mutation called with:', vars);
+            
             const roleName = rawRoles.find(r => r.id === vars.roleId)?.name;
+            console.log('Found roleName:', roleName);
+            
             const siteUrl = (import.meta.env.VITE_SITE_URL || window.location.origin).replace(/\/$/, '');
             const inviteUrl = `${siteUrl}/signup`;
 
-            await sendTeamInviteEmail({
-                email: vars.email,
-                roleName,
-                programTitle: activeEvent.title || 'your workspace',
-                inviteUrl,
-            });
+            let emailSent = false;
+            let emailError: string | null = null;
+
+            // Attempt to send email, but don't fail the entire mutation if it fails
+            try {
+                console.log('Sending email invite to:', vars.email);
+                await sendTeamInviteEmail({
+                    email: vars.email,
+                    roleName,
+                    programTitle: activeEvent.title || 'your workspace',
+                    inviteUrl,
+                });
+                emailSent = true;
+                console.log('Email sent successfully');
+            } catch (err: unknown) {
+                emailError = (err instanceof Error ? err.message : String(err)) || 'Failed to send email';
+                console.error('Email send error:', emailError);
+                // Continue to attempt adding the user even if email fails
+            }
+
+            let memberAdded = false;
+            let memberError: string | null = null;
 
             try {
+                console.log('Adding member to database:', vars.email);
                 await db.addTeamMemberByEmail(vars.email, vars.roleId, activeEvent.id);
-                return { added: true };
-            } catch {
-                return { added: false };
+                memberAdded = true;
+                console.log('Member added successfully');
+            } catch (err: unknown) {
+                memberError = (err instanceof Error ? err.message : String(err)) || 'User not found';
+                console.error('Member add error:', memberError);
+                // Don't rethrow - we want to report both email and member add status
             }
+
+            const result = { emailSent, emailError, memberAdded, memberError };
+            console.log('Mutation result:', result);
+            return result;
         },
-        onError: () => {
-            toast.error('Failed to send invite email. Please try again.');
+        onError: (error) => {
+            const message = error instanceof Error ? error.message : 'An unexpected error occurred';
+            console.error('Mutation error:', message);
+            toast.error(`Error: ${message}`);
         },
         onSuccess: (result) => {
+            console.log('Mutation success. Result:', result);
             queryClient.invalidateQueries({ queryKey: queryKeys.teams.members(activeEvent.id) });
-            if (result?.added) {
+            
+            if (result.emailSent && result.memberAdded) {
                 toast.success('Invite sent and member added to this program.');
+            } else if (result.emailSent && !result.memberAdded) {
+                // Email was sent - this is success even if user doesn't exist yet
+                // They'll be added after they sign up
+                const detailMsg = result.memberError?.includes('User not found') 
+                    ? 'They will be added after they sign up.' 
+                    : result.memberError;
+                toast.success('Invite email sent! ' + detailMsg);
+            } else if (!result.emailSent && result.memberAdded) {
+                toast.success('Member added to the program. (Note: Invite email could not be sent)');
+                if (result.emailError) console.warn('Email send error:', result.emailError);
             } else {
-                toast.success('Invite sent from AwardX. They will be added after signing up.');
+                // Email failed to send - this is the real error
+                const errorMsg = result.emailError || 'Failed to process invitation';
+                toast.error(errorMsg);
+                return; // Don't close modal on failure
             }
+
             setInviteEmails('');
             setIsInviteModalOpen(false);
         },
@@ -245,14 +291,36 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
     };
 
     const handleSendInvites = () => {
+        console.log('handleSendInvites called. inviteEmails:', inviteEmails, 'inviteRoleId:', inviteRoleId);
+        
         const emails = inviteEmails
             .split(/[,\n]/g)
             .map(s => s.trim())
             .filter(Boolean);
 
-        if (emails.length === 0 || !inviteRoleId) return;
+        console.log('Parsed emails:', emails);
 
-        // Invite each email sequentially (optimistic add per email)
+        if (emails.length === 0) {
+            toast.error('Please enter at least one email address');
+            return;
+        }
+
+        if (!inviteRoleId) {
+            toast.error('Please select a role');
+            return;
+        }
+
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const invalidEmails = emails.filter(e => !emailRegex.test(e));
+        if (invalidEmails.length > 0) {
+            toast.error(`Invalid email format: ${invalidEmails.slice(0, 2).join(', ')}${invalidEmails.length > 2 ? '...' : ''}`);
+            return;
+        }
+
+        console.log('Sending invites for:', emails, 'with roleId:', inviteRoleId);
+        
+        // Invite each email sequentially
         for (const email of emails) {
             inviteMutation.mutate({ email, roleId: inviteRoleId });
         }
@@ -559,9 +627,10 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                         <label className="block text-sm font-semibold text-slate-700 mb-1">Assign Role</label>
                         <select
                             className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                            value={inviteRoleId}
+                            value={inviteRoleId || ''}
                             onChange={(e) => setInviteRoleId(e.target.value)}
                         >
+                            <option value="">Select a role...</option>
                             {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                         </select>
                     </div>

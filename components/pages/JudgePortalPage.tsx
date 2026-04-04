@@ -60,6 +60,7 @@ export const JudgePortalPage: React.FC = () => {
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
   const [selectedSubmissionJudgeId, setSelectedSubmissionJudgeId] = useState<string | undefined>();
   const [scoringOpen, setScoringOpen] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState<number>(0);
 
   useEffect(() => {
     const verifyToken = async () => {
@@ -102,8 +103,11 @@ export const JudgePortalPage: React.FC = () => {
       }
     };
 
-    verifyToken();
-  }, [tokenParam]);
+    // Only verify on first load or after explicit refresh
+    if (lastRefresh === 0) {
+      verifyToken();
+    }
+  }, [tokenParam, lastRefresh]);
 
   const formatDate = (dateStr: string) => {
     try {
@@ -183,7 +187,11 @@ export const JudgePortalPage: React.FC = () => {
         submission={selectedSubmission}
         criteria={criteria}
         submissionJudgeId={selectedSubmissionJudgeId}
+        isJudgeView={true}
         onScored={() => {
+          // Refresh assignments from server to get updated status
+          setLastRefresh(Date.now());
+          // Also update local state optimistically for immediate UI feedback
           setAssignments((prev) =>
             prev.map((assignment) =>
               assignment.submissionJudgeId === selectedSubmissionJudgeId

@@ -40,4 +40,23 @@ export const queryKeys = {
   forms: {
     byProgram: (programId: string) => ['forms', programId] as const,
   },
+  roundSubmissions: {
+    byRound: (roundId: string) => ['round-submissions', roundId] as const,
+    countByRound: (roundId: string) => ['round-submissions', 'count', roundId] as const,
+  },
+  voting: {
+    config: (roundId: string) => ['voting', 'config', roundId] as const,
+    results: (roundId: string) => ['voting', 'results', roundId] as const,
+    round: (roundId: string) => ['voting', 'round', roundId] as const,
+    leaderboard: (roundId: string) => ['voting', 'leaderboard', roundId] as const,
+    submission: (roundId: string, submissionId: string) => ['voting', roundId, 'submission', submissionId] as const,
+  },
+  advancement: {
+    preview: (roundId: string) => ['advancement', 'preview', roundId] as const,
+    history: (programId: string) => ['advancement', 'history', programId] as const,
+    event: (eventId: string) => ['advancement', 'event', eventId] as const,
+  },
+  pipeline: {
+    status: (programId: string) => ['pipeline', 'status', programId] as const,
+  },
 } as const;

@@ -60,15 +60,20 @@ export interface Round {
 export interface Submission {
   id: string;
   title: string;
-  applicant: string;
+  applicant?: string;
+  applicantName?: string; // Preferred name from new data layer
   category: string;
   status: 'Pending' | 'Under Review' | 'Shortlisted' | 'Accepted' | 'Rejected';
   score: number | null;
-  date: string;
-  image: string;
+  date?: string;
+  submittedAt?: string; // Preferred date from new data layer
+  image?: string;
+  coverImageUrl?: string; // Preferred from new data layer
   assignedJudges?: string[]; // Array of Judge IDs
   votes?: number;
+  voteCount?: number; // Alternative field name
   submissionData?: any;
+  description?: string; // May come from submissions table
 }
 
 

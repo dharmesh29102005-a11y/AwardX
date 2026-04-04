@@ -19,6 +19,7 @@ const FormSubmissionPage = lazy(() => import('./components/pages/FormSubmissionP
 const PublicProgramPage = lazy(() => import('./components/pages/PublicProgramPage').then((m) => ({ default: m.PublicProgramPage })));
 const JudgePortalPage = lazy(() => import('./components/pages/JudgePortalPage').then((m) => ({ default: m.JudgePortalPage })));
 const MySubmissionsPage = lazy(() => import('./components/pages/MySubmissionsPage').then((m) => ({ default: m.MySubmissionsPage })));
+const PublicVotingPage = lazy(() => import('./components/pages/PublicVotingPage').then((m) => ({ default: m.PublicVotingPage })));
 
 const RouteLoader: React.FC = () => (
   <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -199,6 +200,7 @@ const App: React.FC = () => {
         <Route path="/judge/:token" element={<JudgePortalPage />} />
         <Route path="/program" element={<PublicProgramPage />} />
         <Route path="/program/:slug" element={<PublicProgramPage />} />
+        <Route path="/voting/:roundId" element={<PublicVotingPage />} />
         <Route
           path="/my-submissions"
           element={

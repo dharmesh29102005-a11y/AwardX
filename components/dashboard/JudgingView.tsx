@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { db } from '../../services/database';
-import { Judge, Program, Submission, JudgingCriterion } from '../../services/models';
+import { Judge, Program, Submission, JudgingCriterion, TeamMember } from '../../services/models';
 import { Gavel, CheckCircle2, Clock, Mail, Plus, Settings, Sliders, Trash2, Users, Calendar, UserX } from 'lucide-react';
 import { SkeletonLoader } from '../SkeletonLoader';
 import { Button } from '../Button';
@@ -35,8 +35,10 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    const [replaceAssignments, setReplaceAssignments] = useState(false);
    const [isJudgeModalOpen, setIsJudgeModalOpen] = useState(false);
    const [judgeMode, setJudgeMode] = useState<'invite' | 'add'>('invite');
-   const [judgeForm, setJudgeForm] = useState({ name: '', email: '', bio: '' });
+   const [judgeForm, setJudgeForm] = useState({ name: '', email: '' });
    const [isSavingJudge, setIsSavingJudge] = useState(false);
+   const [addingFromTeam, setAddingFromTeam] = useState(false);
+   const [selectedTeamMemberId, setSelectedTeamMemberId] = useState<string | null>(null);
    const [isRemovingJudge, setIsRemovingJudge] = useState<string | null>(null);
    const [isRemovingAll, setIsRemovingAll] = useState(false);
    const [shortlistOnly, setShortlistOnly] = useState(false);
@@ -60,14 +62,26 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
       staleTime: 30_000,
    });
 
+   const { data: allOrgJudges = [], isLoading: allOrgJudgesLoading } = useQuery({
+      queryKey: ['judges', 'org'],
+      queryFn: () => db.getJudges(),
+      enabled: !!activeEvent?.id,
+      staleTime: 30_000,
+   });
+
    const { data: allSubmissions = [], isLoading: submissionsLoading } = useQuery({
       queryKey: queryKeys.submissions.all(activeEvent?.id ?? ''),
       queryFn: () => db.getSubmissions(activeEvent!.id),
       enabled: !!activeEvent?.id,
       staleTime: 30_000,
    });
-
-   const { data: criteria = [] } = useQuery<JudgingCriterion[]>({
+   const { data: teamMembers = [] } = useQuery<TeamMember[]>({
+      queryKey: queryKeys.teams.members(activeEvent?.id ?? ''),
+      queryFn: () => db.getTeamMembers(activeEvent!.id),
+      enabled: !!activeEvent?.id,
+      staleTime: 30_000,
+   });
+   const { data: criteriaData } = useQuery<JudgingCriterion[]>({
       queryKey: queryKeys.judging.criteria(activeEvent?.id ?? ''),
       queryFn: async (): Promise<JudgingCriterion[]> => {
          if (!supabase || !activeEvent?.id) return defaultCriteria;
@@ -93,9 +107,11 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
       staleTime: 5 * 60_000,
    });
 
+   const criteria = criteriaData ?? defaultCriteria;
+
    useEffect(() => {
       setCriteriaDraft(criteria.map((criterion) => ({ ...criterion })));
-   }, [criteria, activeEvent?.id]);
+   }, [criteriaData, activeEvent?.id]);
 
    const handleCriterionChange = (id: string, field: keyof Omit<JudgingCriterion, 'id' | 'sortOrder'>, value: string | number) => {
       setCriteriaDraft((prev) => prev.map((criterion) => {
@@ -266,6 +282,15 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    const totalWeight = criteriaDraft.reduce((sum, c) => sum + Number(c.weight || 0), 0);
    const judgeTotalPages = Math.max(1, Math.ceil(judges.length / judgesPerPage));
    const paginatedJudges = judges.slice((judgesPage - 1) * judgesPerPage, judgesPage * judgesPerPage);
+   const assignableJudges = judges.length > 0 ? judges : allOrgJudges;
+   const existingJudgeEmails = new Set(
+      judges
+         .map((judge) => String(judge.email || '').trim().toLowerCase())
+         .filter(Boolean),
+   );
+   const eligibleTeamMembers = teamMembers.filter(
+      (member) => !existingJudgeEmails.has(String(member.email || '').trim().toLowerCase()),
+   );
 
    useEffect(() => {
       if (judgesPage > judgeTotalPages) {
@@ -375,7 +400,9 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                               className="flex items-center justify-center gap-2 w-full sm:w-auto"
                               onClick={() => {
                                  setJudgeMode('add');
-                                 setJudgeForm({ name: '', email: '', bio: '' });
+                                 setJudgeForm({ name: '', email: '' });
+                                 setAddingFromTeam(false);
+                                 setSelectedTeamMemberId(null);
                                  setIsJudgeModalOpen(true);
                               }}
                            >
@@ -386,7 +413,9 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                               className="flex items-center justify-center gap-2 w-full sm:w-auto"
                               onClick={() => {
                                  setJudgeMode('invite');
-                                 setJudgeForm({ name: '', email: '', bio: '' });
+                                 setJudgeForm({ name: '', email: '' });
+                                 setAddingFromTeam(false);
+                                 setSelectedTeamMemberId(null);
                                  setIsJudgeModalOpen(true);
                               }}
                            >
@@ -767,7 +796,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                   Replace existing assignments
                </label>
                <div className="max-h-60 overflow-y-auto space-y-2 pr-2">
-                  {judges.map(judge => (
+                  {assignableJudges.map(judge => (
                      <label key={judge.id} className="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors">
                         <div className="flex items-center gap-3">
                            {judge.avatar ? (
@@ -796,6 +825,11 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                         />
                      </label>
                   ))}
+                  {!allOrgJudgesLoading && assignableJudges.length === 0 && (
+                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                        No judges available yet. Add or invite a judge first.
+                     </div>
+                  )}
                </div>
                <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
                   <Button type="button" variant="ghost" onClick={() => setIsAssignModalOpen(false)}>Cancel</Button>
@@ -837,13 +871,21 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                         await db.createJudge({
                            name: judgeForm.name.trim(),
                            email: judgeForm.email.trim(),
-                           bio: judgeForm.bio.trim() || undefined,
                            programId: activeEvent?.id,
                         });
                      }
                      refreshAll();
                      setIsJudgeModalOpen(false);
-                     setJudgeForm({ name: '', email: '', bio: '' });
+                     setJudgeForm({ name: '', email: '' });
+                     setSelectedTeamMemberId(null);
+                     setAddingFromTeam(false);
+                  } catch (error: any) {
+                     const message = String(error?.message || 'Failed to save judge');
+                     if (message.includes('judges_organization_id_email_key') || message.toLowerCase().includes('duplicate key')) {
+                        toast.error('This email is already added as a judge. Use Assign Judges to reassign existing judges.');
+                     } else {
+                        toast.error(message);
+                     }
                   } finally {
                      setIsSavingJudge(false);
                   }
@@ -871,15 +913,66 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                   />
                </div>
                {judgeMode === 'add' && (
-                  <div>
-                     <label className="block text-sm font-semibold text-slate-700 mb-1">Bio (optional)</label>
-                     <textarea
-                        value={judgeForm.bio}
-                        onChange={(e) => setJudgeForm({ ...judgeForm, bio: e.target.value })}
-                        className="w-full px-4 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
-                        rows={3}
-                     />
-                  </div>
+                  <>
+                     <div className="border-t border-slate-200 pt-4">
+                        <div className="flex gap-2 mb-4">
+                           <button
+                              type="button"
+                              onClick={() => setAddingFromTeam(false)}
+                              className={`flex-1 py-2 px-3 rounded-lg font-medium text-sm transition-all ${
+                                 !addingFromTeam
+                                    ? 'bg-indigo-600 text-white'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                              }`}
+                           >
+                              Add Manually
+                           </button>
+                           <button
+                              type="button"
+                              onClick={() => setAddingFromTeam(true)}
+                              className={`flex-1 py-2 px-3 rounded-lg font-medium text-sm transition-all ${
+                                 addingFromTeam
+                                    ? 'bg-indigo-600 text-white'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                              }`}
+                           >
+                              From Team
+                           </button>
+                        </div>
+                     </div>
+                     {addingFromTeam && eligibleTeamMembers.length > 0 && (
+                        <div>
+                           <label className="block text-sm font-semibold text-slate-700 mb-2">Select Team Member</label>
+                           <div className="space-y-2 max-h-60 overflow-y-auto border border-slate-200 rounded-lg p-3 bg-slate-50">
+                              {eligibleTeamMembers.map((member) => (
+                                 <label key={member.memberId} className="flex items-center gap-3 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors">
+                                    <input
+                                       type="radio"
+                                       name="teamMember"
+                                       value={member.memberId}
+                                       checked={selectedTeamMemberId === member.memberId}
+                                       onChange={(e) => {
+                                          setSelectedTeamMemberId(e.target.value);
+                                          setJudgeForm({ name: member.name, email: member.email });
+                                       }}
+                                       className="w-4 h-4 text-indigo-600"
+                                    />
+                                    <div className="flex-1">
+                                       <div className="font-medium text-slate-900">{member.name}</div>
+                                       <div className="text-xs text-slate-500">{member.email}</div>
+                                    </div>
+                                    <span className="text-xs text-slate-500 bg-white px-2 py-1 rounded">{member.role}</span>
+                                 </label>
+                              ))}
+                           </div>
+                        </div>
+                     )}
+                     {addingFromTeam && eligibleTeamMembers.length === 0 && (
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                           All team members are already added as judges.
+                        </div>
+                     )}
+                  </>
                )}
                <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
                   <Button type="button" variant="ghost" onClick={() => setIsJudgeModalOpen(false)}>
