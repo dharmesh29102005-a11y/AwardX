@@ -6,6 +6,41 @@ import { getAuthenticatedUser } from '../_utils/authUser';
 import { createEmailLog, updateEmailLog } from '../_utils/emailLogs';
 import { canManageInvites } from '../_utils/invitePermissions';
 
+const INVITE_TTL_DAYS = 30;
+
+function resolveSafeInviteUrl(siteUrl: string, inviteUrl: string | undefined, token: string) {
+  const fallbackUrl = `${siteUrl}/team-invite/${token}`;
+  if (!inviteUrl) return fallbackUrl;
+
+  try {
+    const candidate = new URL(inviteUrl);
+    const trustedSite = new URL(siteUrl);
+    if (candidate.origin !== trustedSite.origin) return fallbackUrl;
+
+    const normalizedPath = candidate.pathname.replace(/\/+$/, '');
+    if (normalizedPath === '/team-invite') {
+      return `${candidate.origin}${normalizedPath}/${token}`;
+    }
+
+    if (normalizedPath.startsWith('/team-invite/')) {
+      const currentToken = normalizedPath.split('/').pop();
+      if (currentToken === token) return candidate.toString();
+      return fallbackUrl;
+    }
+
+    if (normalizedPath === '/signup') {
+      const queryToken = candidate.searchParams.get('teamInviteToken');
+      if (queryToken === token) return candidate.toString();
+      candidate.searchParams.set('teamInviteToken', token);
+      return candidate.toString();
+    }
+  } catch {
+    // Use fallback when caller-provided URL is malformed.
+  }
+
+  return fallbackUrl;
+}
+
 export default async function handler(req: any, res: any) {
   try {
     if (req.method !== 'POST') {
@@ -63,10 +98,17 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
+    const actorRateLimit = enforceRateLimit(`team-invite:${resolvedOrganizationId}:${auth.user.id}`, 30, 15 * 60 * 1000);
+    if (!actorRateLimit.ok) {
+      res.setHeader('Retry-After', String(actorRateLimit.retryAfterSeconds));
+      res.status(429).json({ error: 'Invite limit reached for this user and organization. Try again later.' });
+      return;
+    }
+
     // Expire prior pending invite for same target to avoid ambiguous acceptance links.
     let expireExistingInvite = supabase
       .from('organization_invites')
-      .update({ status: 'accepted', accepted_at: new Date().toISOString() })
+      .update({ status: 'expired', accepted_at: null })
       .eq('organization_id', resolvedOrganizationId)
       .eq('email', normalizedEmail)
       .eq('status', 'pending');
@@ -88,6 +130,7 @@ export default async function handler(req: any, res: any) {
         invited_by: auth.user.id,
         status: 'pending',
         program_id: programId || null,
+        expires_at: new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString(),
       })
       .select('id, token')
       .single();
@@ -102,17 +145,7 @@ export default async function handler(req: any, res: any) {
     const subject = `AwardX invite: ${programTitle}`;
     const roleLine = roleName ? `Assigned role: ${roleName}` : 'Assigned role: Team member';
     const siteUrl = (process.env.SITE_URL || process.env.VITE_SITE_URL || 'https://awardstuff.vercel.app').replace(/\/$/, '');
-    const resolvedInviteUrl = (() => {
-      if (!inviteUrl) return `${siteUrl}/team-invite/${inviteRow.token}`;
-      if (inviteUrl.includes(inviteRow.token)) return inviteUrl;
-
-      const normalizedBase = inviteUrl.replace(/\/$/, '');
-      if (/\/team-invite$/i.test(normalizedBase)) {
-        return `${normalizedBase}/${inviteRow.token}`;
-      }
-
-      return `${siteUrl}/team-invite/${inviteRow.token}`;
-    })();
+    const resolvedInviteUrl = resolveSafeInviteUrl(siteUrl, inviteUrl, inviteRow.token);
     const inviteLine = `Accept your invite: ${resolvedInviteUrl}`;
 
     const { id: emailLogId } = await createEmailLog(supabase, {

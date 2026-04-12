@@ -1512,6 +1512,7 @@ class DatabaseService {
         name: profile.full_name || 'User',
         email: profile.email || '',
         role: role.name || 'Member',
+        roleId: m.role_id || undefined,
         status: (m.status === 'active' ? 'Active' : 'Inactive') as TeamMember['status'],
         lastActive: profile.updated_at ? new Date(profile.updated_at).toLocaleDateString() : '—',
         avatar: resolveMediaPublicUrl(profile.avatar_url),

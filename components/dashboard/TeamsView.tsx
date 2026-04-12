@@ -190,6 +190,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
     const [inviteEmailBlocks, setInviteEmailBlocks] = useState<string[]>([]);
     const [inviteEmailDraft, setInviteEmailDraft] = useState('');
     const [inviteRoleId, setInviteRoleId] = useState<string>('');
+    const [isBulkInviting, setIsBulkInviting] = useState(false);
     const [memberSearch, setMemberSearch] = useState('');
     const [memberPage, setMemberPage] = useState(1);
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -269,7 +270,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
 
     const roles: Role[] = rawRoles.map(r => ({
         ...r,
-        usersCount: members.filter(m => m.role === r.name).length,
+        usersCount: members.filter(m => m.roleId === r.id).length,
     }));
 
     useEffect(() => {
@@ -284,7 +285,6 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
     const inviteMutation = useMutation({
         mutationFn: async (vars: { email: string; roleId: string }) => {
             const roleName = rawRoles.find(r => r.id === vars.roleId)?.name;
-            const siteUrl = (import.meta.env.VITE_SITE_URL || window.location.origin).replace(/\/$/, '');
             const result: any = await sendTeamInviteEmail({
                 email: vars.email,
                 roleId: vars.roleId,
@@ -298,19 +298,11 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
             const message = error instanceof Error ? error.message : 'An unexpected error occurred';
             toast.error(`Error: ${message}`);
         },
-        onSuccess: (result: any) => {
+        onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.teams.members(eventId) });
             if (orgId) {
                 queryClient.invalidateQueries({ queryKey: queryKeys.invites.pending(orgId) });
             }
-            if (result?.emailSent === false) {
-                toast.warning(`Invite created — email not sent. Use "Resend" or copy the link.`);
-            } else {
-                toast.success('Invite sent. They will be added after accepting.');
-            }
-            setInviteEmailBlocks([]);
-            setInviteEmailDraft('');
-            setIsInviteModalOpen(false);
         },
     });
 
@@ -491,7 +483,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
         setInviteEmailDraft('');
     };
 
-    const handleSendInvites = () => {
+    const handleSendInvites = async () => {
         const draftEmails = inviteEmailDraft
             .split(/[,\n]/g)
             .map(s => s.trim())
@@ -508,8 +500,47 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
             return;
         }
 
-        for (const email of emails) {
-            inviteMutation.mutate({ email, roleId: inviteRoleId });
+        const dedupedEmails = Array.from(new Set(emails.map((email) => email.toLowerCase())));
+        setIsBulkInviting(true);
+
+        const failed: string[] = [];
+        const warned: string[] = [];
+
+        try {
+            for (const email of dedupedEmails) {
+                try {
+                    const result: any = await inviteMutation.mutateAsync({ email, roleId: inviteRoleId });
+                    if (result?.emailSent === false) {
+                        warned.push(email);
+                    }
+                } catch {
+                    failed.push(email);
+                }
+            }
+
+            if (dedupedEmails.length > 0) {
+                queryClient.invalidateQueries({ queryKey: queryKeys.teams.members(eventId) });
+                if (orgId) {
+                    queryClient.invalidateQueries({ queryKey: queryKeys.invites.pending(orgId) });
+                }
+            }
+
+            if (failed.length > 0) {
+                toast.error(`Sent ${dedupedEmails.length - failed.length}/${dedupedEmails.length} invites. Failed: ${failed.slice(0, 2).join(', ')}${failed.length > 2 ? '…' : ''}`);
+                return;
+            }
+
+            if (warned.length > 0) {
+                toast.warning(`Invites created for ${warned.length}/${dedupedEmails.length}, but some emails were not delivered. Use Resend in Pending Invitations.`);
+            } else {
+                toast.success(`Sent ${dedupedEmails.length} invite${dedupedEmails.length === 1 ? '' : 's'}.`);
+            }
+
+            setInviteEmailBlocks([]);
+            setInviteEmailDraft('');
+            setIsInviteModalOpen(false);
+        } finally {
+            setIsBulkInviting(false);
         }
     };
 
@@ -531,9 +562,9 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
 
     const siteOrigin = (import.meta.env.VITE_SITE_URL || window.location.origin).replace(/\/$/, '');
 
-    // Filter pending invites for this program (or org-level invites)
+    // Filter pending invites for this program only.
     const filteredPendingInvites = pendingInvites.filter(
-        inv => !inv.programId || inv.programId === eventId
+        inv => inv.programId === eventId
     );
 
     if (!activeEvent) {
@@ -956,8 +987,8 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                     </div>
                     <div className="pt-4 flex justify-end gap-3">
                         <Button variant="ghost" onClick={() => setIsInviteModalOpen(false)}>Cancel</Button>
-                        <Button onClick={handleSendInvites} disabled={inviteMutation.isPending}>
-                            {inviteMutation.isPending ? 'Sending…' : 'Send Invites'}
+                        <Button onClick={handleSendInvites} disabled={isBulkInviting || inviteMutation.isPending}>
+                            {(isBulkInviting || inviteMutation.isPending) ? 'Sending…' : 'Send Invites'}
                         </Button>
                     </div>
                 </div>

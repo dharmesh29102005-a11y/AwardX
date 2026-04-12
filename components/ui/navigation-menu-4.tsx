@@ -227,7 +227,7 @@ export default function NavigationMenuFour({
                 <NavigationMenuList className="flex-col items-start gap-0 md:gap-2">
                   {navigationLinks.map((link, index) => (
                     <NavigationMenuItem key={`compact-${index}`} className="w-full">
-                      {link.submenu ? (
+                      {!isTopLevelLink(link) ? (
                         <>
                           <div className="text-muted-foreground px-2 py-1.5 text-xs font-medium">
                             {link.label}

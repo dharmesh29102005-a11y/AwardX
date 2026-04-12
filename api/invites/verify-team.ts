@@ -60,7 +60,7 @@ export default async function handler(req: any, res: any) {
   try {
     const { data: invite, error: inviteError } = await supabase
       .from('organization_invites')
-      .select('id, organization_id, program_id, role_id, invited_by, email, status, accepted_at')
+      .select('id, organization_id, program_id, role_id, invited_by, email, status, accepted_at, expires_at')
       .eq('token', token)
       .single();
 
@@ -71,6 +71,17 @@ export default async function handler(req: any, res: any) {
 
     if (invite.status === 'accepted' || invite.accepted_at) {
       res.status(403).json({ error: 'This invite has already been accepted.' });
+      return;
+    }
+
+    if (invite.status === 'expired' || (invite.expires_at && new Date(invite.expires_at).getTime() <= Date.now())) {
+      await supabase
+        .from('organization_invites')
+        .update({ status: 'expired', accepted_at: null })
+        .eq('id', invite.id)
+        .eq('status', 'pending');
+
+      res.status(403).json({ error: 'This invite has expired.' });
       return;
     }
 
@@ -98,7 +109,7 @@ export default async function handler(req: any, res: any) {
 
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, email, full_name')
+      .select('id, email, full_name, organization_id')
       .eq('id', auth.user.id)
       .maybeSingle();
 
@@ -108,57 +119,38 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
-    const acceptedAt = new Date().toISOString();
+    const profileName = profile?.full_name || auth.user.user_metadata?.full_name || auth.user.user_metadata?.name || authEmail.split('@')[0] || 'User';
 
-    const { error: profileUpsertError } = await supabase
-      .from('profiles')
-      .upsert(
-        {
-          id: auth.user.id,
-          email: inviteEmail,
-          full_name: profile?.full_name || auth.user.user_metadata?.full_name || auth.user.user_metadata?.name || authEmail.split('@')[0] || 'User',
-          organization_id: invite.organization_id,
-        },
-        { onConflict: 'id' },
-      );
+    const { data: acceptanceResult, error: acceptError } = await supabase
+      .rpc('accept_organization_invite', {
+        p_token: token,
+        p_user_id: auth.user.id,
+        p_user_email: inviteEmail,
+        p_user_full_name: profileName,
+      });
 
-    if (profileUpsertError) {
-      res.status(500).json({ error: profileUpsertError.message || 'Failed to link user profile' });
+    if (acceptError) {
+      res.status(500).json({ error: acceptError.message || 'Failed to accept invite' });
       return;
     }
 
-    const { error: memberUpsertError } = await supabase
-      .from('organization_members')
-      .upsert(
-        {
-          organization_id: invite.organization_id,
-          program_id: invite.program_id,
-          user_id: auth.user.id,
-          role_id: invite.role_id,
-          status: 'active',
-          invited_at: acceptedAt,
-          joined_at: acceptedAt,
-          invited_by: invite.invited_by || null,
-        },
-        { onConflict: 'organization_id,user_id,program_id' },
-      );
+    const resultRow = Array.isArray(acceptanceResult) ? acceptanceResult[0] : acceptanceResult;
+    if (!resultRow?.ok) {
+      const reason = resultRow?.error || 'accept_failed';
+      if (reason === 'already_processed') {
+        res.status(403).json({ error: 'This invite has already been accepted.' });
+        return;
+      }
+      if (reason === 'expired') {
+        res.status(403).json({ error: 'This invite has expired.' });
+        return;
+      }
+      if (reason === 'email_mismatch') {
+        res.status(403).json({ error: 'This invite is for a different email address.' });
+        return;
+      }
 
-    if (memberUpsertError) {
-      res.status(500).json({ error: memberUpsertError.message || 'Failed to add team member' });
-      return;
-    }
-
-    const { error: updateInviteError } = await supabase
-      .from('organization_invites')
-      .update({
-        status: 'accepted',
-        accepted_at: acceptedAt,
-      })
-      .eq('id', invite.id)
-      .eq('status', 'pending');
-
-    if (updateInviteError) {
-      res.status(500).json({ error: updateInviteError.message || 'Failed to accept invite' });
+      res.status(500).json({ error: 'Failed to accept invite' });
       return;
     }
 

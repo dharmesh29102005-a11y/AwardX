@@ -5,6 +5,42 @@ import { getSupabaseAdmin, isSupabaseConfigured } from '../supabase.js';
 
 const router = Router();
 
+type RateLimitResult = {
+	ok: boolean;
+	retryAfterSeconds: number;
+};
+
+type HitMap = Map<string, number[]>;
+
+const rateLimitStore: HitMap = new Map();
+
+function getClientIp(req: any): string {
+	const forwarded = req.headers?.['x-forwarded-for'];
+	if (typeof forwarded === 'string' && forwarded.length > 0) {
+		return forwarded.split(',')[0].trim();
+	}
+	return req.socket?.remoteAddress || req.connection?.remoteAddress || 'unknown';
+}
+
+function enforceRateLimit(key: string, maxRequests: number, windowMs: number): RateLimitResult {
+	const now = Date.now();
+	const windowStart = now - windowMs;
+
+	const existingHits = rateLimitStore.get(key) || [];
+	const freshHits = existingHits.filter((timestamp) => timestamp > windowStart);
+
+	if (freshHits.length >= maxRequests) {
+		const oldestHit = freshHits[0] || now;
+		const retryAfterSeconds = Math.max(1, Math.ceil((oldestHit + windowMs - now) / 1000));
+		rateLimitStore.set(key, freshHits);
+		return { ok: false, retryAfterSeconds };
+	}
+
+	freshHits.push(now);
+	rateLimitStore.set(key, freshHits);
+	return { ok: true, retryAfterSeconds: 0 };
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function getResend() {
@@ -82,19 +118,12 @@ async function updateEmailLog(
 }
 
 async function canManage(supabase: any, userId: string, organizationId: string): Promise<boolean> {
-	const { data: profile } = await supabase
-		.from('profiles')
-		.select('organization_id')
-		.eq('id', userId)
-		.maybeSingle();
-	if (profile?.organization_id === organizationId) return true;
-
 	const { data: memberships } = await supabase
 		.from('organization_members')
 		.select('status, roles(name, permissions)')
 		.eq('organization_id', organizationId)
 		.eq('user_id', userId)
-		.in('status', ['active', 'pending']);
+		.eq('status', 'active');
 
 	if (!memberships || memberships.length === 0) return false;
 	const ALLOWED_ROLES = new Set(['admin', 'program manager']);
@@ -115,6 +144,7 @@ function isValidEmail(s: string) {
 }
 
 const INVITE_TOKEN_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i;
+const INVITE_TTL_DAYS = 30;
 
 function normalizeInviteToken(raw?: string | null): string {
 	if (!raw) return '';
@@ -146,7 +176,7 @@ function normalizeInviteToken(raw?: string | null): string {
 async function resolveTeamInvite(supabase: any, token: string) {
 	const { data: invite, error: inviteError } = await supabase
 		.from('organization_invites')
-		.select('id, organization_id, program_id, role_id, invited_by, email, status, accepted_at')
+		.select('id, organization_id, program_id, role_id, invited_by, email, status, accepted_at, expires_at')
 		.eq('token', token)
 		.single();
 
@@ -156,6 +186,16 @@ async function resolveTeamInvite(supabase: any, token: string) {
 
 	if (invite.status === 'accepted' || invite.accepted_at) {
 		return { error: 'This invite has already been accepted.' as const, statusCode: 403 };
+	}
+
+	if (invite.status === 'expired' || (invite.expires_at && new Date(invite.expires_at).getTime() <= Date.now())) {
+		await supabase
+			.from('organization_invites')
+			.update({ status: 'expired', accepted_at: null })
+			.eq('id', invite.id)
+			.eq('status', 'pending');
+
+		return { error: 'This invite has expired.' as const, statusCode: 403 };
 	}
 
 	return { invite };
@@ -201,6 +241,55 @@ router.get('/verify-team', async (req, res) => {
 		const resolved = await resolveTeamInvite(supabase, token);
 		if ('error' in resolved) {
 			return res.status(resolved.statusCode || 404).json({ error: resolved.error });
+		}
+
+		const authResult = await getAuthUser(req);
+		if (authResult?.user) {
+			const authEmail = String(authResult.user.email || '').toLowerCase().trim();
+			const inviteEmail = String(resolved.invite.email || '').toLowerCase().trim();
+			if (!authEmail || authEmail !== inviteEmail) {
+				return res.status(403).json({ error: 'This invite is for a different email address.' });
+			}
+
+			const { data: profile } = await supabase
+				.from('profiles')
+				.select('id, email, full_name')
+				.eq('id', authResult.user.id)
+				.maybeSingle();
+
+			const profileEmail = String(profile?.email || '').toLowerCase().trim();
+			if (profileEmail && profileEmail !== inviteEmail) {
+				return res.status(403).json({ error: 'This invite is for a different email address.' });
+			}
+
+			const fullName = profile?.full_name || authResult.user.user_metadata?.full_name || authResult.user.user_metadata?.name || authEmail.split('@')[0] || 'User';
+			const { data: acceptanceResult, error: acceptError } = await supabase.rpc('accept_organization_invite', {
+				p_token: token,
+				p_user_id: authResult.user.id,
+				p_user_email: inviteEmail,
+				p_user_full_name: fullName,
+			});
+
+			if (acceptError) {
+				return res.status(500).json({ error: acceptError.message || 'Failed to accept invite' });
+			}
+
+			const resultRow = Array.isArray(acceptanceResult) ? acceptanceResult[0] : acceptanceResult;
+			if (!resultRow?.ok) {
+				const reason = resultRow?.error || 'accept_failed';
+				if (reason === 'already_processed') {
+					return res.json({ ok: true, accepted: true, alreadyAccepted: true });
+				}
+				if (reason === 'expired') {
+					return res.status(403).json({ error: 'This invite has expired.' });
+				}
+				if (reason === 'email_mismatch') {
+					return res.status(403).json({ error: 'This invite is for a different email address.' });
+				}
+				return res.status(500).json({ error: 'Failed to accept invite' });
+			}
+
+			return res.json({ ok: true, accepted: true });
 		}
 
 		return res.status(401).json({
@@ -261,60 +350,42 @@ router.post('/verify-team', async (req, res) => {
 			return res.status(403).json({ error: 'This invite is for a different email address.' });
 		}
 
-		const acceptedAt = new Date().toISOString();
 		const { data: existingProfile } = await supabase
 			.from('profiles')
-			.select('id, full_name')
+			.select('id, email, full_name')
 			.eq('id', authResult.user.id)
 			.maybeSingle();
 
-		const { error: profileUpsertError } = await supabase
-			.from('profiles')
-			.upsert(
-				{
-					id: authResult.user.id,
-					email: inviteEmail,
-					full_name: existingProfile?.full_name || authResult.user.user_metadata?.full_name || authResult.user.user_metadata?.name || profileEmail.split('@')[0] || 'User',
-					organization_id: resolved.invite.organization_id,
-				},
-				{ onConflict: 'id' },
-			);
-
-		if (profileUpsertError) {
-			return res.status(500).json({ error: profileUpsertError.message || 'Failed to link user profile' });
+		const existingProfileEmail = String(existingProfile?.email || '').toLowerCase().trim();
+		if (existingProfileEmail && existingProfileEmail !== inviteEmail) {
+			return res.status(403).json({ error: 'This invite is for a different email address.' });
 		}
 
-		const { error: memberUpsertError } = await supabase
-			.from('organization_members')
-			.upsert(
-				{
-					organization_id: resolved.invite.organization_id,
-					program_id: resolved.invite.program_id,
-					user_id: authResult.user.id,
-					role_id: resolved.invite.role_id,
-					status: 'active',
-					invited_at: acceptedAt,
-					joined_at: acceptedAt,
-					invited_by: resolved.invite.invited_by || null,
-				},
-				{ onConflict: 'organization_id,user_id,program_id' },
-			);
+		const fullName = existingProfile?.full_name || authResult.user.user_metadata?.full_name || authResult.user.user_metadata?.name || profileEmail.split('@')[0] || 'User';
+		const { data: acceptanceResult, error: acceptError } = await supabase.rpc('accept_organization_invite', {
+			p_token: token,
+			p_user_id: authResult.user.id,
+			p_user_email: inviteEmail,
+			p_user_full_name: fullName,
+		});
 
-		if (memberUpsertError) {
-			return res.status(500).json({ error: memberUpsertError.message || 'Failed to add team member' });
+		if (acceptError) {
+			return res.status(500).json({ error: acceptError.message || 'Failed to accept invite' });
 		}
 
-		const { error: updateInviteError } = await supabase
-			.from('organization_invites')
-			.update({
-				status: 'accepted',
-				accepted_at: acceptedAt,
-			})
-			.eq('id', resolved.invite.id)
-			.eq('status', 'pending');
-
-		if (updateInviteError) {
-			return res.status(500).json({ error: updateInviteError.message || 'Failed to accept invite' });
+		const resultRow = Array.isArray(acceptanceResult) ? acceptanceResult[0] : acceptanceResult;
+		if (!resultRow?.ok) {
+			const reason = resultRow?.error || 'accept_failed';
+			if (reason === 'already_processed') {
+				return res.json({ ok: true, accepted: true, alreadyAccepted: true });
+			}
+			if (reason === 'expired') {
+				return res.status(403).json({ error: 'This invite has expired.' });
+			}
+			if (reason === 'email_mismatch') {
+				return res.status(403).json({ error: 'This invite is for a different email address.' });
+			}
+			return res.status(500).json({ error: 'Failed to accept invite' });
 		}
 
 		const { data: program } = resolved.invite.program_id
@@ -373,6 +444,19 @@ router.post('/team', async (req, res) => {
 			return res.status(403).json({ error: 'Insufficient permissions to send team invites' });
 		}
 
+		const ip = getClientIp(req);
+		const ipRateLimit = enforceRateLimit(`team-invite:${ip}`, 10, 15 * 60 * 1000);
+		if (!ipRateLimit.ok) {
+			res.setHeader('Retry-After', String(ipRateLimit.retryAfterSeconds));
+			return res.status(429).json({ error: 'Rate limit exceeded. Try again later.' });
+		}
+
+		const actorRateLimit = enforceRateLimit(`team-invite:${resolvedOrgId}:${user.id}`, 30, 15 * 60 * 1000);
+		if (!actorRateLimit.ok) {
+			res.setHeader('Retry-After', String(actorRateLimit.retryAfterSeconds));
+			return res.status(429).json({ error: 'Invite limit reached for this user and organization. Try again later.' });
+		}
+
 		// Expire any existing pending invite for this email in the same scope.
 		let expireQ = supabase
 			.from('organization_invites')
@@ -396,6 +480,7 @@ router.post('/team', async (req, res) => {
 				invited_by: user.id,
 				status: 'pending',
 				program_id: programId || null,
+				expires_at: new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString(),
 			})
 			.select('id, token')
 			.single();
@@ -515,9 +600,34 @@ router.post('/team', async (req, res) => {
 
 router.post('/judge', async (req, res) => {
 	try {
-		const { email, name, programTitle, inviteId, inviteUrl: passedUrl } = req.body || {};
+		const { email, name, programTitle, inviteId, inviteUrl: passedUrl, organizationId } = req.body || {};
 		if (!email || !programTitle) {
 			return res.status(400).json({ error: 'email and programTitle are required' });
+		}
+
+		const authResult = await getAuthUser(req);
+		if (!authResult?.user) {
+			return res.status(401).json({ error: 'Authentication required' });
+		}
+
+		if (!isSupabaseConfigured()) {
+			return res.status(503).json({ error: 'Database not configured' });
+		}
+		const supabase = getSupabaseAdmin();
+		const { data: profile } = await supabase
+			.from('profiles')
+			.select('organization_id')
+			.eq('id', authResult.user.id)
+			.maybeSingle();
+
+		const resolvedOrgId = organizationId || profile?.organization_id || null;
+		if (!resolvedOrgId) {
+			return res.status(400).json({ error: 'organizationId is required for judge invites' });
+		}
+
+		const permitted = await canManage(supabase, authResult.user.id, resolvedOrgId);
+		if (!permitted) {
+			return res.status(403).json({ error: 'Insufficient permissions to send judge invites' });
 		}
 
 		const resend = getResend();
@@ -578,11 +688,24 @@ router.post('/resend', async (req, res) => {
 			.eq('id', authResult.user.id)
 			.maybeSingle();
 
-		if (!profile?.organization_id) {
+		let resolvedOrgId = profile?.organization_id || null;
+		if (!resolvedOrgId) {
+			const { data: membership } = await supabase
+				.from('organization_members')
+				.select('organization_id')
+				.eq('user_id', authResult.user.id)
+				.eq('status', 'active')
+				.order('joined_at', { ascending: false })
+				.limit(1)
+				.maybeSingle();
+			resolvedOrgId = membership?.organization_id || null;
+		}
+
+		if (!resolvedOrgId) {
 			return res.status(400).json({ error: 'Could not resolve inviter organization' });
 		}
 
-		const permitted = await canManage(supabase, authResult.user.id, profile.organization_id);
+		const permitted = await canManage(supabase, authResult.user.id, resolvedOrgId);
 		if (!permitted) return res.status(403).json({ error: 'Insufficient permissions' });
 
 		const resend = getResend();
@@ -600,8 +723,18 @@ router.post('/resend', async (req, res) => {
 			if (inviteErr || !invite) return res.status(404).json({ error: 'Invite not found' });
 			if (invite.status !== 'pending') return res.status(400).json({ error: 'Only pending invites can be resent' });
 
+			const canManageInviteOrg = await canManage(supabase, authResult.user.id, invite.organization_id);
+			if (!canManageInviteOrg) return res.status(403).json({ error: 'Insufficient permissions' });
+
 			const newToken = randomUUID();
-			await supabase.from('organization_invites').update({ token: newToken }).eq('id', invite.id).eq('status', 'pending');
+			await supabase
+				.from('organization_invites')
+				.update({
+					token: newToken,
+					expires_at: new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+				})
+				.eq('id', invite.id)
+				.eq('status', 'pending');
 
 			const inviteUrl = `${siteUrl}/signup?teamInviteToken=${newToken}`;
 			const programTitle = (invite as any).programs?.title || programTitleFallback || 'your workspace';

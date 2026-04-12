@@ -58,9 +58,9 @@ function getInviteToken(pathToken?: string) {
 
 export const TeamInvitePage: React.FC = () => {
   const { token: pathToken } = useParams<{ token?: string }>();
-  const token = getInviteToken(pathToken);
-  const navigate = useNavigate();
   const location = useLocation();
+  const token = React.useMemo(() => getInviteToken(pathToken), [pathToken, location.search]);
+  const navigate = useNavigate();
 
   const [checking, setChecking] = React.useState(true);
   const [accepting, setAccepting] = React.useState(false);
@@ -86,7 +86,11 @@ export const TeamInvitePage: React.FC = () => {
       setError(null);
 
       try {
-        const resp = await fetch(`/api/invites/verify-team?token=${encodeURIComponent(token)}`);
+        const { session } = await auth.getSession();
+        const accessToken = session?.access_token;
+        const resp = await fetch(`/api/invites/verify-team?token=${encodeURIComponent(token)}`, {
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+        });
         const body = await resp.json().catch(() => ({}));
 
         if (resp.status === 401 && body?.requiresAuth) {
@@ -114,7 +118,7 @@ export const TeamInvitePage: React.FC = () => {
 
   const nextPath = `/team-invite/${token}`;
 
-  const acceptInvite = async () => {
+  const acceptInvite = React.useCallback(async () => {
     if (!token) return;
     setAccepting(true);
     setError(null);
@@ -151,7 +155,17 @@ export const TeamInvitePage: React.FC = () => {
     } finally {
       setAccepting(false);
     }
-  };
+  }, [navigate, nextPath, token]);
+
+  React.useEffect(() => {
+    if (!token) return;
+
+    const redirectTarget = sessionStorage.getItem('postAuthRedirect');
+    if (redirectTarget !== nextPath) return;
+
+    sessionStorage.removeItem('postAuthRedirect');
+    void acceptInvite();
+  }, [acceptInvite, nextPath, token]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">

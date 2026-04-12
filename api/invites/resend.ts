@@ -7,6 +7,8 @@ import { createSupabaseAdmin } from '../_utils/supabaseAdmin';
 import { resendInviteSchema } from '../_utils/validation';
 import { createEmailLog, updateEmailLog } from '../_utils/emailLogs';
 
+const INVITE_TTL_DAYS = 30;
+
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
@@ -48,12 +50,25 @@ export default async function handler(req: any, res: any) {
     .eq('id', auth.user.id)
     .maybeSingle();
 
-  if (!inviterProfile?.organization_id) {
+  let resolvedOrganizationId = inviterProfile?.organization_id || null;
+  if (!resolvedOrganizationId) {
+    const { data: membership } = await supabase
+      .from('organization_members')
+      .select('organization_id')
+      .eq('user_id', auth.user.id)
+      .eq('status', 'active')
+      .order('joined_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    resolvedOrganizationId = membership?.organization_id || null;
+  }
+
+  if (!resolvedOrganizationId) {
     res.status(400).json({ error: 'Could not resolve inviter organization' });
     return;
   }
 
-  const permitted = await canManageInvites(supabase, auth.user.id, inviterProfile.organization_id);
+  const permitted = await canManageInvites(supabase, auth.user.id, resolvedOrganizationId);
   if (!permitted) {
     res.status(403).json({ error: 'Insufficient permissions to resend invites' });
     return;
@@ -74,7 +89,8 @@ export default async function handler(req: any, res: any) {
         return;
       }
 
-      if (inviteRow.organization_id !== inviterProfile.organization_id) {
+      const canManageTargetOrg = await canManageInvites(supabase, auth.user.id, inviteRow.organization_id);
+      if (!canManageTargetOrg) {
         res.status(403).json({ error: 'You cannot resend invites outside your organization' });
         return;
       }
@@ -87,7 +103,10 @@ export default async function handler(req: any, res: any) {
       const rotatedToken = randomUUID();
       const { error: rotateError } = await supabase
         .from('organization_invites')
-        .update({ token: rotatedToken })
+        .update({
+          token: rotatedToken,
+          expires_at: new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+        })
         .eq('id', inviteRow.id)
         .eq('status', 'pending');
 
@@ -158,7 +177,8 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
-    if (judgeRow.organization_id !== inviterProfile.organization_id) {
+    const canManageJudgeOrg = await canManageInvites(supabase, auth.user.id, judgeRow.organization_id);
+    if (!canManageJudgeOrg) {
       res.status(403).json({ error: 'You cannot resend invites outside your organization' });
       return;
     }

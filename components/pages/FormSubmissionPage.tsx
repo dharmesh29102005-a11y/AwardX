@@ -506,7 +506,7 @@ export const FormSubmissionPage: React.FC = () => {
     const value = formData[field.id] || '';
     
     // Apple-style base input class
-    const inputBaseClass = "w-full p-4 bg-[#F2F2F7] hover:bg-[#E5E5EA] focus:bg-white border-2 border-transparent focus:border-slate-300 rounded-[16px] outline-none transition-all duration-200 text-[17px] text-[#1C1C1E] placeholder:text-[#8E8E93]";
+    const inputBaseClass = "w-full p-5 bg-[#F2F2F7] hover:bg-[#E5E5EA] focus:bg-white border-2 border-transparent focus:border-indigo-400 rounded-[20px] outline-none transition-all duration-300 text-[18px] text-[#1C1C1E] placeholder:text-[#8E8E93] shadow-sm focus:shadow-md";
 
     switch (field.type) {
       case 'textarea':
@@ -517,7 +517,7 @@ export const FormSubmissionPage: React.FC = () => {
             placeholder={field.placeholder}
             rows={4}
             required={field.required}
-            className={`${inputBaseClass} resize-y min-h-[120px]`}
+            className={`${inputBaseClass} resize-y min-h-[160px]`}
             style={{ 
               fontFamily: theme.fontFamily 
             }}
@@ -545,13 +545,13 @@ export const FormSubmissionPage: React.FC = () => {
         );
       case 'radio':
         return (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {field.options?.map((opt, i) => {
               const isSelected = value === opt;
               return (
-                <label key={i} className={`flex items-center gap-4 p-4 rounded-[16px] border-2 cursor-pointer transition-all duration-200 ${isSelected ? 'border-indigo-600 bg-indigo-50/50' : 'border-[#F2F2F7] hover:border-[#E5E5EA] bg-white'}`}>
-                  <div className={`flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full border-2 transition-colors ${isSelected ? 'border-indigo-600 bg-indigo-600' : 'border-[#C7C7CC]'}`}>
-                    {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-white" />}
+                <label key={i} className={`flex items-center gap-5 p-5 rounded-[20px] border-2 cursor-pointer transition-all duration-300 group hover:-translate-y-0.5 ${isSelected ? 'border-indigo-600 bg-[#F0F5FF]' : 'border-[#E5E5EA] hover:border-[#D1D1D6] bg-white hover:shadow-sm'}`}>
+                  <div className={`flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-full border-[2.5px] transition-colors ${isSelected ? 'border-indigo-600 bg-indigo-600' : 'border-[#C7C7CC] group-hover:border-[#AEAEB2]'}`}>
+                    {isSelected && <div className="w-3 h-3 rounded-full bg-white" />}
                   </div>
                   <input
                     type="radio"
@@ -562,7 +562,7 @@ export const FormSubmissionPage: React.FC = () => {
                     required={field.required}
                     className="sr-only"
                   />
-                  <span className="text-[17px] font-medium text-[#1C1C1E]">{opt}</span>
+                  <span className="text-[18px] font-semibold text-[#1C1C1E]">{opt}</span>
                 </label>
               );
             })}
@@ -570,13 +570,13 @@ export const FormSubmissionPage: React.FC = () => {
         );
       case 'checkbox':
         return (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {field.options?.map((opt, i) => {
               const isSelected = Array.isArray(value) && value.includes(opt);
               return (
-                <label key={i} className={`flex items-center gap-4 p-4 rounded-[16px] border-2 cursor-pointer transition-all duration-200 ${isSelected ? 'border-indigo-600 bg-indigo-50/50' : 'border-[#F2F2F7] hover:border-[#E5E5EA] bg-white'}`}>
-                  <div className={`flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-[6px] border-2 transition-colors ${isSelected ? 'border-indigo-600 bg-indigo-600' : 'border-[#C7C7CC]'}`}>
-                    {isSelected && <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                <label key={i} className={`flex items-center gap-5 p-5 rounded-[20px] border-2 cursor-pointer transition-all duration-300 group hover:-translate-y-0.5 ${isSelected ? 'border-indigo-600 bg-[#F0F5FF]' : 'border-[#E5E5EA] hover:border-[#D1D1D6] bg-white hover:shadow-sm'}`}>
+                  <div className={`flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-[8px] border-[2.5px] transition-colors ${isSelected ? 'border-indigo-600 bg-indigo-600' : 'border-[#C7C7CC] group-hover:border-[#AEAEB2]'}`}>
+                    {isSelected && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
                   </div>
                   <input
                     type="checkbox"
@@ -590,7 +590,7 @@ export const FormSubmissionPage: React.FC = () => {
                     }}
                     className="sr-only"
                   />
-                  <span className="text-[17px] font-medium text-[#1C1C1E]">{opt}</span>
+                  <span className="text-[18px] font-semibold text-[#1C1C1E]">{opt}</span>
                 </label>
               );
             })}
@@ -603,7 +603,7 @@ export const FormSubmissionPage: React.FC = () => {
               value={value}
               onChange={(e) => handleInputChange(field.id, e.target.value)}
               required={field.required}
-              className={`${inputBaseClass} appearance-none cursor-pointer pr-12 font-semibold text-indigo-900 bg-indigo-50/50 hover:bg-indigo-50 border-indigo-100 focus:border-indigo-300`}
+              className={`${inputBaseClass} appearance-none cursor-pointer pr-12 font-bold text-indigo-900 bg-indigo-50/50 hover:bg-indigo-50 border-indigo-100 focus:border-indigo-400`}
               style={{ fontFamily: theme.fontFamily }}
             >
               <option value="">{field.placeholder || 'Select award category...'}</option>
@@ -696,28 +696,28 @@ export const FormSubmissionPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen font-sans selection:bg-indigo-100 selection:text-indigo-900 transition-colors duration-500" style={{ backgroundColor: theme.backgroundColor !== '#ffffff' ? theme.backgroundColor : '#F5F5F7' }}>
-      <div className="max-w-3xl mx-auto py-8 px-4 sm:px-6 lg:px-8 min-h-screen flex flex-col justify-center">
+    <div className="min-h-screen w-full font-sans selection:bg-indigo-100 selection:text-indigo-900 transition-colors duration-500" style={{ backgroundColor: theme.backgroundColor !== '#ffffff' ? theme.backgroundColor : '#F5F5F7' }}>
+      <div className="w-full max-w-[1400px] mx-auto py-6 sm:py-10 px-4 sm:px-8 lg:px-12 min-h-screen flex flex-col justify-center">
 
         {paymentState === 'cancelled' && (
-          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6 rounded-[20px] border border-amber-200 bg-amber-50 px-5 py-4 text-amber-900 flex items-start gap-4 shadow-sm">
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6 mx-auto w-full max-w-4xl rounded-[20px] border border-amber-200 bg-amber-50 px-6 py-5 text-amber-900 flex items-start gap-4 shadow-sm">
             <AlertCircle className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold text-lg tracking-tight">Payment Cancelled</p>
-              <p className="text-[15px] opacity-80 mt-1">{paymentMessage || 'Your draft is safe. Submit again when you are ready to complete payment.'}</p>
+              <p className="font-bold text-lg tracking-tight">Payment Cancelled</p>
+              <p className="text-[16px] opacity-80 mt-1">{paymentMessage || 'Your draft is safe. Submit again when you are ready to complete payment.'}</p>
             </div>
           </motion.div>
         )}
 
         {formPages.length > 1 && (
-          <div className="mb-8 px-2">
-            <div className="flex justify-between items-end mb-3">
-              <span className="text-sm font-semibold tracking-wide text-[#86868B] uppercase">Step {currentPageIdx + 1} of {formPages.length}</span>
-              <span className="text-sm font-medium text-[#1D1D1F]">{Math.round(((currentPageIdx) / formPages.length) * 100)}% Completed</span>
+          <div className="mb-10 px-4 max-w-4xl mx-auto w-full">
+            <div className="flex justify-between items-end mb-4">
+              <span className="text-[13px] font-bold tracking-widest text-[#86868B] uppercase">Step {currentPageIdx + 1} of {formPages.length}</span>
+              <span className="text-[15px] font-semibold text-[#1D1D1F]">{Math.round(((currentPageIdx) / formPages.length) * 100)}% Completed</span>
             </div>
-            <div className="w-full h-2 bg-slate-200/60 rounded-full overflow-hidden">
+            <div className="w-full h-2.5 bg-slate-200/60 rounded-full overflow-hidden mb-2">
               <div 
-                className="h-full rounded-full transition-all duration-700 ease-out" 
+                className="h-full rounded-full transition-all duration-700 ease-out shadow-sm" 
                 style={{ width: `${((currentPageIdx + 1) / formPages.length) * 100}%`, backgroundColor: theme.primaryColor || '#007AFF' }}
               />
             </div>
@@ -727,15 +727,15 @@ export const FormSubmissionPage: React.FC = () => {
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-[32px] md:rounded-[40px] shadow-[0_8px_40px_-12px_rgba(0,0,0,0.06)] border border-slate-100/50 overflow-hidden relative"
+          className="bg-white rounded-[32px] md:rounded-[40px] shadow-sm md:shadow-[0_8px_40px_-12px_rgba(0,0,0,0.06)] border border-slate-200/60 overflow-hidden relative w-full lg:max-w-6xl mx-auto"
         >
-          <div className="p-8 sm:p-12 md:p-14">
-            <div className="mb-10">
-              <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-[#1D1D1F] mb-4" style={{ fontFamily: theme.fontFamily }}>
+          <div className="p-6 sm:p-14 md:p-20 flex flex-col items-center">
+            <div className="mb-12 w-full max-w-4xl">
+              <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-[#1D1D1F] mb-6" style={{ fontFamily: theme.fontFamily }}>
                 {currentPage?.title || formTitle}
               </h1>
               {currentPage?.description && (
-                <p className="text-lg md:text-xl text-[#86868B] leading-relaxed max-w-2xl" style={{ fontFamily: theme.fontFamily }}>
+                <p className="text-xl md:text-2xl text-[#86868B] leading-relaxed max-w-3xl" style={{ fontFamily: theme.fontFamily }}>
                   {currentPage.description}
                 </p>
               )}
@@ -790,11 +790,12 @@ export const FormSubmissionPage: React.FC = () => {
                 animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
                 exit={{ opacity: 0, x: -10, filter: 'blur(4px)' }}
                 transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                className="w-full max-w-4xl"
               >
-                <div className="space-y-8">
+                <div className="space-y-10">
                   {pageFields.map(field => (
-                    <div key={field.id} className="group">
-                      <label className="block text-[17px] font-semibold text-[#1D1D1F] mb-3 ml-1 group-focus-within:text-indigo-600 transition-colors" style={{ fontFamily: theme.fontFamily }}>
+                    <div key={field.id} className="group flex flex-col items-start w-full">
+                      <label className="block text-[20px] md:text-[22px] font-bold text-[#1D1D1F] mb-4 ml-1 group-focus-within:text-indigo-600 transition-colors tracking-tight w-full" style={{ fontFamily: theme.fontFamily }}>
                         {field.label} {field.required && <span className="text-rose-500 ml-1">*</span>}
                       </label>
                       {renderFieldInput(field)}
@@ -809,7 +810,7 @@ export const FormSubmissionPage: React.FC = () => {
               </motion.div>
             </AnimatePresence>
 
-            <div className="mt-12 pt-8 flex flex-col-reverse sm:flex-row justify-between items-center gap-4">
+            <div className="mt-16 pt-8 flex flex-col-reverse sm:flex-row justify-between items-center gap-4 w-full max-w-4xl border-t border-slate-100">
               <div className="flex items-center w-full sm:w-auto justify-between sm:justify-start gap-4">
                 <Button
                   variant="ghost"
@@ -837,7 +838,7 @@ export const FormSubmissionPage: React.FC = () => {
                   <Button
                     onClick={handleSubmit}
                     disabled={isSubmitting}
-                    className="w-full sm:w-auto px-10 py-4 rounded-full text-[17px] font-semibold tracking-wide transition-all shadow-[0_4px_14px_0_rgba(99,102,241,0.39)] hover:shadow-[0_6px_20px_rgba(99,102,241,0.23)] hover:-translate-y-0.5 active:translate-y-0 active:shadow-none min-w-[160px]"
+                    className="w-full sm:w-auto px-12 py-5 rounded-full text-[19px] font-bold tracking-wide transition-all shadow-[0_4px_14px_0_rgba(99,102,241,0.39)] hover:shadow-[0_6px_20px_rgba(99,102,241,0.23)] hover:-translate-y-0.5 active:translate-y-0 active:shadow-none min-w-[200px]"
                     style={{ backgroundColor: theme.primaryColor || '#007AFF', color: theme.buttonTextColor || '#fff' }}
                   >
                     {isSubmitting ? (
@@ -853,7 +854,7 @@ export const FormSubmissionPage: React.FC = () => {
                 ) : (
                   <Button
                     onClick={handleNext}
-                    className="w-full sm:w-auto px-10 py-4 rounded-full text-[17px] font-semibold tracking-wide transition-all shadow-[0_4px_14px_0_rgba(99,102,241,0.39)] hover:shadow-[0_6px_20px_rgba(99,102,241,0.23)] hover:-translate-y-0.5 active:translate-y-0 active:shadow-none min-w-[160px]"
+                    className="w-full sm:w-auto px-12 py-5 rounded-full text-[19px] font-bold tracking-wide transition-all shadow-[0_4px_14px_0_rgba(99,102,241,0.39)] hover:shadow-[0_6px_20px_rgba(99,102,241,0.23)] hover:-translate-y-0.5 active:translate-y-0 active:shadow-none min-w-[200px]"
                     style={{ backgroundColor: theme.primaryColor || '#007AFF', color: theme.buttonTextColor || '#fff' }}
                   >
                     Next Step <ChevronRight className="w-5 h-5 ml-2" />
