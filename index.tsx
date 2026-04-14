@@ -20,13 +20,19 @@ import { Toaster } from 'sonner';
 import { initSentry } from './services/sentry';
 import { SupabaseNetworkLoader } from './components/SupabaseNetworkLoader';
 
-initSentry();
+const isProd = import.meta.env.PROD;
+if (isProd) {
+  initSentry();
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: false,
       retry: 1,
+      gcTime: 30 * 60 * 1000, // 30 minutes
       staleTime: 5 * 60 * 1000, // 5 minutes default
     },
   },
@@ -46,7 +52,7 @@ root.render(
           <ProgramProvider>
             <SupabaseNetworkLoader />
             <App />
-            <Analytics />
+            {isProd ? <Analytics /> : null}
             <Toaster richColors position="top-right" />
           </ProgramProvider>
         </AuthProvider>

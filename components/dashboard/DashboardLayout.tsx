@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useDeferredValue, useState, useEffect, useMemo, useRef } from 'react';
 import {
   LayoutDashboard, FileText, Gavel,
   BarChart3, Users, Settings, LogOut, Bell, Search,
@@ -165,6 +165,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [pendingShortcut, setPendingShortcut] = useState<string | null>(null);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const notificationsRef = useRef<HTMLDivElement>(null);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const shouldLoadSearchCorpus = isSearchOpen || deferredSearchQuery.trim().length > 0;
 
   // Category State
   const [categories, setCategories] = useState<Category[]>([]);
@@ -197,50 +199,56 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const allProgramsQuery = useQuery({
     queryKey: ['dashboard-search-programs'],
     queryFn: () => databaseService.getPrograms(),
+    enabled: shouldLoadSearchCorpus,
     staleTime: 5 * 60_000,
   });
 
   const allSubmissionsQuery = useQuery({
-    queryKey: ['dashboard-search-submissions'],
-    queryFn: () => databaseService.getSubmissions(),
+    queryKey: ['dashboard-search-submissions', activeEvent?.id || 'none'],
+    queryFn: () => (activeEvent ? databaseService.getSubmissions(activeEvent.id) : Promise.resolve([])),
+    enabled: shouldLoadSearchCorpus,
     staleTime: 30_000,
   });
 
   const allTeamMembersQuery = useQuery({
     queryKey: ['dashboard-search-team'],
     queryFn: () => databaseService.getTeamMembers(),
+    enabled: shouldLoadSearchCorpus,
     staleTime: 30_000,
   });
 
   const allRolesQuery = useQuery({
     queryKey: ['dashboard-search-roles'],
     queryFn: () => databaseService.getRoles(),
+    enabled: shouldLoadSearchCorpus,
     staleTime: 60_000,
   });
 
   const allLogsQuery = useQuery({
     queryKey: ['dashboard-search-logs'],
     queryFn: () => databaseService.getLogs(),
+    enabled: shouldLoadSearchCorpus,
     staleTime: 30_000,
   });
 
   const allNotificationsQuery = useQuery({
     queryKey: ['dashboard-search-notifications'],
     queryFn: () => databaseService.getNotifications({ limit: 50 }),
+    enabled: shouldLoadSearchCorpus,
     staleTime: 30_000,
   });
 
   const activeCategoriesQuery = useQuery({
     queryKey: ['dashboard-search-categories', activeEvent?.id || 'none'],
     queryFn: () => (activeEvent ? databaseService.getCategories(activeEvent.id) : Promise.resolve([])),
-    enabled: !!activeEvent,
+    enabled: !!activeEvent && shouldLoadSearchCorpus,
     staleTime: 60_000,
   });
 
   const activeFormsQuery = useQuery({
     queryKey: ['dashboard-search-forms', activeEvent?.id || 'none'],
     queryFn: () => (activeEvent ? databaseService.getForms(activeEvent.id) : Promise.resolve([])),
-    enabled: !!activeEvent,
+    enabled: !!activeEvent && shouldLoadSearchCorpus,
     staleTime: 60_000,
   });
 
@@ -270,7 +278,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   }, [onChangeView]);
 
   const searchResults = useMemo<UniversalSearchResult[]>(() => {
-    const query = searchQuery.trim().toLowerCase();
+    const query = deferredSearchQuery.trim().toLowerCase();
     const programs = allProgramsQuery.data || [];
     const submissions = allSubmissionsQuery.data || [];
     const members = allTeamMembersQuery.data || [];
@@ -471,7 +479,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     allTeamMembersQuery.data,
     activeCategoriesQuery.data,
     activeFormsQuery.data,
-    searchQuery,
+    deferredSearchQuery,
   ]);
 
   const runShortcutAction = (action: string) => {
@@ -588,65 +596,49 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   }, []);
 
   useEffect(() => {
-    // Fetch real user data from Supabase
+    // Fetch user + permissions once per mount instead of on every event/category refresh.
     const fetchUserData = async () => {
       try {
         await databaseService.initialize();
         setPermissionsReady(true);
-        // After init, permissions are cached in databaseService.
-        // Derive userPermissions from PERMISSIONS constants that pass hasPermission.
         try {
           const loadedPerms = Object.values(PERMISSIONS).filter(p => databaseService.hasPermission(p));
           setUserPermissions(loadedPerms);
         } catch {
-          setUserPermissions(Object.values(PERMISSIONS)); // fallback to all
+          setUserPermissions(Object.values(PERMISSIONS));
         }
         const realUser = await databaseService.getCurrentUser();
         if (realUser) {
           setCurrentUser(realUser);
-        } else {
-          // Fallback: Get user from auth
-          const { user } = await auth.getUser();
-          if (user) {
-            setCurrentUser({
-              id: user.id,
-              name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-              email: user.email || '',
-              role: 'Admin',
-              status: 'Active',
-              lastActive: 'Now',
-              avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture || '',
-              joinedDate: new Date().toISOString().split('T')[0],
-            });
-          }
+          return;
+        }
+        const { user } = await auth.getUser();
+        if (user) {
+          setCurrentUser({
+            id: user.id,
+            name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+            email: user.email || '',
+            role: 'Admin',
+            status: 'Active',
+            lastActive: 'Now',
+            avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture || '',
+            joinedDate: new Date().toISOString().split('T')[0],
+          });
         }
       } catch (error) {
         console.error('Failed to fetch user data:', error);
-        // Fallback: Get user from auth directly
-        try {
-          const { user } = await auth.getUser();
-          if (user) {
-            setCurrentUser({
-              id: user.id,
-              name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-              email: user.email || '',
-              role: 'Admin',
-              status: 'Active',
-              lastActive: 'Now',
-              avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture || '',
-              joinedDate: new Date().toISOString().split('T')[0],
-            });
-          }
-        } catch (authError) {
-          console.error('Failed to get user from auth:', authError);
-        }
       }
     };
 
     fetchUserData();
+  }, []);
 
+  useEffect(() => {
     const fetchCategories = async () => {
-      if (!activeEvent) return;
+      if (!activeEvent) {
+        setCategories([]);
+        return;
+      }
       const cats = await databaseService.getCategories(activeEvent.id);
       setCategories(cats);
     };

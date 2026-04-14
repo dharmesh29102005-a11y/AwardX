@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import { Button } from '../Button';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -55,6 +55,51 @@ const ensureMandatoryAwardSelectorField = (
   return [mandatoryField, ...nonAwardFields];
 };
 
+const buildHierarchicalAwardOptions = (rows: Array<{ id: string; title: string; parent_id: string | null }>) => {
+  const validRows = rows
+    .map((row) => ({
+      id: String(row.id || '').trim(),
+      title: String(row.title || '').trim(),
+      parent_id: row.parent_id ? String(row.parent_id) : null,
+    }))
+    .filter((row) => row.id && row.title);
+
+  const parentRows = validRows.filter((row) => !row.parent_id);
+  const childrenByParent = new Map<string, Array<{ id: string; title: string; parent_id: string | null }>>();
+
+  validRows.forEach((row) => {
+    if (!row.parent_id) return;
+    const children = childrenByParent.get(row.parent_id) || [];
+    children.push(row);
+    childrenByParent.set(row.parent_id, children);
+  });
+
+  const options: string[] = [];
+  parentRows.forEach((parent) => {
+    const children = childrenByParent.get(parent.id) || [];
+    if (children.length === 0) {
+      options.push(parent.title);
+      return;
+    }
+    children.forEach((child) => {
+      options.push(`${parent.title} -> ${child.title}`);
+    });
+  });
+
+  const parentIds = new Set(parentRows.map((row) => row.id));
+  validRows.forEach((row) => {
+    if (row.parent_id && !parentIds.has(row.parent_id)) {
+      options.push(row.title);
+    }
+  });
+
+  if (options.length > 0) {
+    return Array.from(new Set(options));
+  }
+
+  return Array.from(new Set(validRows.map((row) => row.title)));
+};
+
 export const FormSubmissionPage: React.FC = () => {
   const navigate = useNavigate();
   const { formId: formIdParam } = useParams<{ formId?: string }>();
@@ -95,7 +140,7 @@ export const FormSubmissionPage: React.FC = () => {
   const [programId, setProgramId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setIsError] = useState<string | null>(null);
-  const [currentPageIdx, setCurrentPageIdx] = useState(0);
+  const [currentFieldIdx, setCurrentFieldIdx] = useState(0);
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -105,6 +150,7 @@ export const FormSubmissionPage: React.FC = () => {
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(null);
   const [paymentState, setPaymentState] = useState<'idle' | 'success' | 'cancelled'>('idle');
   const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
+  const autoAdvanceTimeoutRef = useRef<number | null>(null);
 
   const completeSubmissionSideEffects = async (currentFormId: string) => {
     const { user } = await auth.getUser();
@@ -190,12 +236,12 @@ export const FormSubmissionPage: React.FC = () => {
 
         const { data: categoryRows } = await supabase
           .from('categories')
-          .select('title')
+          .select('id, title, parent_id')
           .eq('program_id', form.program_id)
           .order('title', { ascending: true });
 
-        const awardOptions = Array.from(
-          new Set((categoryRows || []).map((row: any) => String(row.title || '').trim()).filter(Boolean)),
+        const awardOptions = buildHierarchicalAwardOptions(
+          (categoryRows || []) as Array<{ id: string; title: string; parent_id: string | null }>,
         );
 
         const { data: paymentConfigRow } = await supabase
@@ -295,7 +341,7 @@ export const FormSubmissionPage: React.FC = () => {
         const { data: draft } = await submissionDrafts.get(formId, user?.id, user ? undefined : sessionId);
         if (draft?.draft_data && Object.keys(draft.draft_data).length > 0) {
           setFormData(draft.draft_data);
-          if (draft.current_page > 0) setCurrentPageIdx(draft.current_page);
+          if (draft.current_page > 0) setCurrentFieldIdx(draft.current_page);
         }
 
         // Track form view
@@ -327,7 +373,7 @@ export const FormSubmissionPage: React.FC = () => {
           user_id: user?.id,
           session_id: user ? undefined : (sessionId || undefined),
           draft_data: formData,
-          current_page: currentPageIdx,
+          current_page: currentFieldIdx,
         });
         setLastSavedAt(new Date());
         setSaveState('saved');
@@ -336,7 +382,7 @@ export const FormSubmissionPage: React.FC = () => {
       }
     }, 2000); // 2s debounce
     return () => clearTimeout(timer);
-  }, [formData, currentPageIdx, formId, isLoading, isSubmitted]);
+  }, [formData, currentFieldIdx, formId, isLoading, isSubmitted]);
 
   const requiredFields = useMemo(() => formFields.filter(f => !!f.required), [formFields]);
   const completedRequiredCount = useMemo(() => {
@@ -354,45 +400,97 @@ export const FormSubmissionPage: React.FC = () => {
     setShowRequirements(false);
   };
 
-  const currentPage = formPages[currentPageIdx] || formPages[0];
-  const pageFields = formFields.filter(f => f.pageId === currentPage?.id);
-  const isLastPage = currentPageIdx === formPages.length - 1;
+  const stepFields = formFields;
+  const stepCount = Math.max(1, stepFields.length);
+  const safeStepIndex = Math.min(currentFieldIdx, Math.max(stepCount - 1, 0));
+  const currentField = stepFields[safeStepIndex] || null;
+  const currentPage = formPages.find((page) => page.id === currentField?.pageId) || formPages[0] || null;
+  const isLastStep = safeStepIndex >= stepCount - 1;
 
-  const handleInputChange = (fieldId: string, value: any) => {
-    setFormData(prev => ({ ...prev, [fieldId]: value }));
-    if (saveState !== 'saving') {
-      setSaveState('idle');
-    }
+  useEffect(() => {
+    setCurrentFieldIdx((prev) => Math.min(prev, Math.max(stepFields.length - 1, 0)));
+  }, [stepFields.length]);
+
+  useEffect(() => {
+    return () => {
+      if (autoAdvanceTimeoutRef.current) {
+        window.clearTimeout(autoAdvanceTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const hasFieldValue = (value: any) => {
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === 'string') return value.trim().length > 0;
+    return value != null && value !== '';
   };
 
-  const validatePage = () => {
-    for (const field of pageFields) {
-      if (field.required && !formData[field.id]) {
+  const validateCurrentStep = () => {
+    if (!currentField) return true;
+    if (!currentField.required) return true;
+    return hasFieldValue(formData[currentField.id]);
+  };
+
+  const validateAllRequired = () => {
+    for (const field of requiredFields) {
+      if (!hasFieldValue(formData[field.id])) {
         return false;
       }
     }
     return true;
   };
 
+  const canAutoAdvanceField = (field: FormField, value: any) => {
+    if (isLastStep) return false;
+    if (field.type === 'textarea' || field.type === 'file') return false;
+    return hasFieldValue(value);
+  };
+
+  const handleInputChange = (fieldId: string, value: any) => {
+    setFormData(prev => ({ ...prev, [fieldId]: value }));
+    if (saveState !== 'saving') {
+      setSaveState('idle');
+    }
+
+    if (!currentField || currentField.id !== fieldId) return;
+    if (!canAutoAdvanceField(currentField, value)) return;
+
+    if (autoAdvanceTimeoutRef.current) {
+      window.clearTimeout(autoAdvanceTimeoutRef.current);
+    }
+
+    autoAdvanceTimeoutRef.current = window.setTimeout(() => {
+      setCurrentFieldIdx((prev) => {
+        if (prev >= stepCount - 1) return prev;
+        return prev + 1;
+      });
+    }, 450);
+  };
+
   const handleNext = () => {
-    if (!validatePage()) {
+    if (!validateCurrentStep()) {
       toast.error('Please fill in all required fields');
       return;
     }
-    if (currentPageIdx < formPages.length - 1) {
-      setCurrentPageIdx(prev => prev + 1);
+    if (safeStepIndex < stepCount - 1) {
+      setCurrentFieldIdx(prev => prev + 1);
     }
   };
 
   const handleBack = () => {
-    if (currentPageIdx > 0) {
-      setCurrentPageIdx(prev => prev - 1);
+    if (safeStepIndex > 0) {
+      setCurrentFieldIdx(prev => prev - 1);
     }
   };
 
   const handleSubmit = async () => {
-    if (!validatePage()) {
+    if (!validateCurrentStep()) {
       toast.error('Please fill in all required fields');
+      return;
+    }
+
+    if (!validateAllRequired()) {
+      toast.error('Please complete all required questions before submitting.');
       return;
     }
 
@@ -709,20 +807,18 @@ export const FormSubmissionPage: React.FC = () => {
           </motion.div>
         )}
 
-        {formPages.length > 1 && (
-          <div className="mb-10 px-4 max-w-4xl mx-auto w-full">
-            <div className="flex justify-between items-end mb-4">
-              <span className="text-[13px] font-bold tracking-widest text-[#86868B] uppercase">Step {currentPageIdx + 1} of {formPages.length}</span>
-              <span className="text-[15px] font-semibold text-[#1D1D1F]">{Math.round(((currentPageIdx) / formPages.length) * 100)}% Completed</span>
-            </div>
-            <div className="w-full h-2.5 bg-slate-200/60 rounded-full overflow-hidden mb-2">
-              <div 
-                className="h-full rounded-full transition-all duration-700 ease-out shadow-sm" 
-                style={{ width: `${((currentPageIdx + 1) / formPages.length) * 100}%`, backgroundColor: theme.primaryColor || '#007AFF' }}
-              />
-            </div>
+        <div className="mb-10 px-4 max-w-4xl mx-auto w-full">
+          <div className="flex justify-between items-end mb-4">
+            <span className="text-[13px] font-bold tracking-widest text-[#86868B] uppercase">Question {safeStepIndex + 1} of {stepCount}</span>
+            <span className="text-[15px] font-semibold text-[#1D1D1F]">{Math.round(((safeStepIndex + 1) / stepCount) * 100)}% Completed</span>
           </div>
-        )}
+          <div className="w-full h-2.5 bg-slate-200/60 rounded-full overflow-hidden mb-2">
+            <div
+              className="h-full rounded-full transition-all duration-700 ease-out shadow-sm"
+              style={{ width: `${((safeStepIndex + 1) / stepCount) * 100}%`, backgroundColor: theme.primaryColor || '#007AFF' }}
+            />
+          </div>
+        </div>
 
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
@@ -730,12 +826,50 @@ export const FormSubmissionPage: React.FC = () => {
           className="bg-white rounded-[32px] md:rounded-[40px] shadow-sm md:shadow-[0_8px_40px_-12px_rgba(0,0,0,0.06)] border border-slate-200/60 overflow-hidden relative w-full lg:max-w-6xl mx-auto"
         >
           <div className="p-6 sm:p-14 md:p-20 flex flex-col items-center">
-            <div className="mb-12 w-full max-w-4xl">
-              <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-[#1D1D1F] mb-6" style={{ fontFamily: theme.fontFamily }}>
-                {currentPage?.title || formTitle}
+            <div className="mb-10 w-full max-w-4xl">
+              <div className="mb-8 flex items-center justify-between gap-3">
+                <Button
+                  variant="ghost"
+                  onClick={handleBack}
+                  disabled={safeStepIndex === 0}
+                  className={`rounded-full px-5 py-2.5 text-sm font-semibold ${safeStepIndex === 0 ? 'opacity-40' : 'text-[#1D1D1F] hover:bg-[#F5F5F7]'}`}
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" /> Back
+                </Button>
+
+                <div className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[#86868B]">
+                  {currentPage?.title || formTitle}
+                </div>
+
+                {isLastStep ? (
+                  <Button
+                    onClick={handleSubmit}
+                    disabled={isSubmitting}
+                    className="rounded-full px-6 py-2.5 text-sm font-bold"
+                    style={{ backgroundColor: theme.primaryColor || '#007AFF', color: theme.buttonTextColor || '#fff' }}
+                  >
+                    {isSubmitting
+                      ? 'Submitting...'
+                      : paymentConfig?.enabled && Number(paymentConfig?.fee || 0) > 0
+                        ? `Pay ${paymentConfig.currency} ${Number(paymentConfig.fee || 0).toFixed(2)}`
+                        : 'Submit'}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleNext}
+                    className="rounded-full px-6 py-2.5 text-sm font-bold"
+                    style={{ backgroundColor: theme.primaryColor || '#007AFF', color: theme.buttonTextColor || '#fff' }}
+                  >
+                    Next <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                )}
+              </div>
+
+              <h1 className="text-3xl md:text-5xl font-bold tracking-tight text-[#1D1D1F] mb-4" style={{ fontFamily: theme.fontFamily }}>
+                {formTitle}
               </h1>
               {currentPage?.description && (
-                <p className="text-xl md:text-2xl text-[#86868B] leading-relaxed max-w-3xl" style={{ fontFamily: theme.fontFamily }}>
+                <p className="text-lg md:text-xl text-[#86868B] leading-relaxed max-w-3xl" style={{ fontFamily: theme.fontFamily }}>
                   {currentPage.description}
                 </p>
               )}
@@ -785,81 +919,38 @@ export const FormSubmissionPage: React.FC = () => {
 
             <AnimatePresence mode="wait">
               <motion.div
-                key={currentPageIdx}
+                key={currentField?.id || safeStepIndex}
                 initial={{ opacity: 0, x: 10, filter: 'blur(4px)' }}
                 animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
                 exit={{ opacity: 0, x: -10, filter: 'blur(4px)' }}
                 transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                className="w-full max-w-4xl"
+                className="w-full max-w-2xl"
               >
-                <div className="space-y-10">
-                  {pageFields.map(field => (
-                    <div key={field.id} className="group flex flex-col items-start w-full">
-                      <label className="block text-[20px] md:text-[22px] font-bold text-[#1D1D1F] mb-4 ml-1 group-focus-within:text-indigo-600 transition-colors tracking-tight w-full" style={{ fontFamily: theme.fontFamily }}>
-                        {field.label} {field.required && <span className="text-rose-500 ml-1">*</span>}
-                      </label>
-                      {renderFieldInput(field)}
-                      {field.helpText && (
-                        <p className="text-[14px] mt-2.5 ml-1 text-[#86868B]" style={{ fontFamily: theme.fontFamily }}>
-                          {field.helpText}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                {currentField ? (
+                  <div className="group flex flex-col items-start w-full">
+                    <label className="block text-[22px] md:text-[26px] font-bold text-[#1D1D1F] mb-5 ml-1 group-focus-within:text-indigo-600 transition-colors tracking-tight w-full" style={{ fontFamily: theme.fontFamily }}>
+                      {currentField.label} {currentField.required && <span className="text-rose-500 ml-1">*</span>}
+                    </label>
+                    {renderFieldInput(currentField)}
+                    {currentField.helpText && (
+                      <p className="text-[14px] mt-2.5 ml-1 text-[#86868B]" style={{ fontFamily: theme.fontFamily }}>
+                        {currentField.helpText}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-slate-500">
+                    No questions found in this form.
+                  </div>
+                )}
               </motion.div>
             </AnimatePresence>
 
-            <div className="mt-16 pt-8 flex flex-col-reverse sm:flex-row justify-between items-center gap-4 w-full max-w-4xl border-t border-slate-100">
-              <div className="flex items-center w-full sm:w-auto justify-between sm:justify-start gap-4">
-                <Button
-                  variant="ghost"
-                  onClick={handleBack}
-                  disabled={currentPageIdx === 0}
-                  className={`px-6 py-3.5 rounded-full text-[17px] font-medium transition-all ${currentPageIdx === 0 ? 'opacity-0 pointer-events-none' : 'text-[#86868B] hover:text-[#1D1D1F] hover:bg-[#F5F5F7]'}`}
-                >
-                  <ChevronLeft className="w-5 h-5 mr-1" /> Back
-                </Button>
-                
-                <div className="sm:hidden text-[14px] text-[#86868B] font-medium">
-                  {saveState === 'saving' && 'Saving...'}
-                  {saveState === 'saved' && 'Saved'}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-6 w-full sm:w-auto">
-                <div className="hidden sm:block text-[14px] text-[#86868B] font-medium">
-                  {saveState === 'saving' && 'Saving draft...'}
-                  {saveState === 'saved' && `Saved${lastSavedAt ? ` at ${lastSavedAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` : ''}`}
-                  {saveState === 'error' && <span className="text-rose-500">Save failed</span>}
-                </div>
-
-                {isLastPage ? (
-                  <Button
-                    onClick={handleSubmit}
-                    disabled={isSubmitting}
-                    className="w-full sm:w-auto px-12 py-5 rounded-full text-[19px] font-bold tracking-wide transition-all shadow-[0_4px_14px_0_rgba(99,102,241,0.39)] hover:shadow-[0_6px_20px_rgba(99,102,241,0.23)] hover:-translate-y-0.5 active:translate-y-0 active:shadow-none min-w-[200px]"
-                    style={{ backgroundColor: theme.primaryColor || '#007AFF', color: theme.buttonTextColor || '#fff' }}
-                  >
-                    {isSubmitting ? (
-                      <div className="flex items-center justify-center">
-                        <Loader2 className="w-5 h-5 mr-3 animate-spin" /> Submitting
-                      </div>
-                    ) : (
-                      paymentConfig?.enabled && Number(paymentConfig?.fee || 0) > 0
-                        ? `Pay ${paymentConfig.currency} ${Number(paymentConfig.fee || 0).toFixed(2)}`
-                        : 'Submit Application'
-                    )}
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={handleNext}
-                    className="w-full sm:w-auto px-12 py-5 rounded-full text-[19px] font-bold tracking-wide transition-all shadow-[0_4px_14px_0_rgba(99,102,241,0.39)] hover:shadow-[0_6px_20px_rgba(99,102,241,0.23)] hover:-translate-y-0.5 active:translate-y-0 active:shadow-none min-w-[200px]"
-                    style={{ backgroundColor: theme.primaryColor || '#007AFF', color: theme.buttonTextColor || '#fff' }}
-                  >
-                    Next Step <ChevronRight className="w-5 h-5 ml-2" />
-                  </Button>
-                )}
+            <div className="mt-16 pt-8 flex justify-center items-center w-full max-w-4xl border-t border-slate-100">
+              <div className="text-[14px] text-[#86868B] font-medium text-center">
+                {saveState === 'saving' && 'Saving draft...'}
+                {saveState === 'saved' && `Saved${lastSavedAt ? ` at ${lastSavedAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` : ''}`}
+                {saveState === 'error' && <span className="text-rose-500">Save failed</span>}
               </div>
             </div>
           </div>

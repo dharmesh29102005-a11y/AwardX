@@ -1890,7 +1890,7 @@ class DatabaseService {
     // Get the form to find the program_id
     const { data: form, error: formError } = await supabase
       .from('program_forms')
-      .select('program_id, title, is_active')
+      .select('*')
       .eq('id', formId)
       .single();
 
@@ -1912,14 +1912,67 @@ class DatabaseService {
         .single()
       : null;
 
+    const extractEmailFromResponses = (responses: Record<string, any>) => {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      for (const value of Object.values(responses || {})) {
+        if (typeof value === 'string' && emailRegex.test(value.trim())) {
+          return value.trim();
+        }
+      }
+      return null;
+    };
+
+    const formRecord = form as any;
+    const allowMultipleNominations = !!formRecord.allow_multiple_nominations;
+    const configuredMaxNominations = Math.max(1, Number(formRecord.max_nominations_per_person || 1));
+    const nominationLimit = allowMultipleNominations ? configuredMaxNominations : 1;
+    const autoAcceptSubmissions = formRecord.auto_accept_submissions !== false;
+
+    const applicantEmail = String(profile?.data?.email || extractEmailFromResponses(formData) || '').trim();
+    const applicantName = String(profile?.data?.full_name || '').trim();
+
+    // Enforce nomination limits for the same form + person identity.
+    if (nominationLimit > 0) {
+      let existingQuery = supabase
+        .from('submissions')
+        .select('id', { count: 'exact', head: true })
+        .eq('program_id', form.program_id)
+        .contains('submission_data', { form_id: formId });
+
+      if (userId) {
+        existingQuery = existingQuery.eq('applicant_id', userId);
+      } else if (applicantEmail) {
+        existingQuery = existingQuery.ilike('applicant_email', applicantEmail);
+      } else {
+        existingQuery = null as any;
+      }
+
+      if (existingQuery) {
+        const { count: existingCount, error: existingCountError } = await existingQuery;
+        if (existingCountError) {
+          throw new Error(existingCountError.message || 'Failed to validate nomination limit');
+        }
+
+        if ((existingCount || 0) >= nominationLimit) {
+          if (allowMultipleNominations) {
+            throw new Error(`Nomination limit reached. Maximum allowed is ${nominationLimit} submissions.`);
+          }
+          throw new Error('You have already submitted this nomination form.');
+        }
+      }
+    }
+
     // Create submission with form data in submission_data field
     // Set allowPublicSubmission flag to allow submissions from any authenticated user
     const { data, error } = await submissions.create({
       program_id: form.program_id,
       title: form.title || 'Form Submission',
       description: `Form submission for ${form.title}`,
+      status: autoAcceptSubmissions ? 'accepted' : 'pending',
       payment_status: options?.paymentRequired ? 'pending' : 'paid',
       payment_amount: options?.paymentRequired ? Number(options.paymentAmount || 0) : 0,
+      applicant_name: applicantName || undefined,
+      applicant_email: applicantEmail || undefined,
       submission_data: {
         form_id: formId,
         form_title: form.title,
@@ -1933,8 +1986,8 @@ class DatabaseService {
       throw new Error(error?.message || 'Failed to submit form');
     }
 
-    // Update with applicant name/email if available
-    if (profile?.data) {
+    // Backfill applicant identity from profile if needed.
+    if (profile?.data && (!applicantName || !applicantEmail)) {
       await supabase
         .from('submissions')
         .update({
@@ -1968,46 +2021,117 @@ class DatabaseService {
 
   // Stats
   async getStats(programId?: string) {
-    const submissions = await this.getSubmissions(programId);
-    const programs = await this.getPrograms();
-    const judges = await this.getJudges(programId);
+    if (!supabase) {
+      return {
+        totalSubmissions: 0,
+        activePrograms: 0,
+        pendingReview: 0,
+        revenue: 0,
+        activeJudges: 0,
+        submissionTrend: [],
+        categorySplit: [],
+      };
+    }
 
-    const activePrograms = programs.filter(p => p.status === 'Active');
+    let activeProgramsCountQuery = supabase
+      .from('programs')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'active');
 
-    // Calculate Trends (Last 7 Days)
+    let activeJudgesCountQuery = supabase
+      .from('judges')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'active');
+
+    let submissionsQuery = supabase
+      .from('submissions')
+      .select('status, submitted_at, category_id');
+
+    if (programId) {
+      activeJudgesCountQuery = activeJudgesCountQuery.eq('program_id', programId);
+      submissionsQuery = submissionsQuery.eq('program_id', programId);
+    }
+
+    const [
+      { count: activeProgramsCount },
+      { count: activeJudgesCount },
+      { data: submissionRows },
+      revenue,
+    ] = await Promise.all([
+      activeProgramsCountQuery,
+      activeJudgesCountQuery,
+      submissionsQuery,
+      this.calculateRevenue(programId),
+    ]);
+
+    const submissions = submissionRows || [];
+    const totalSubmissions = submissions.length;
+
+    const pendingReview = submissions.reduce((count, submission: any) => {
+      const status = String(submission.status || '').toLowerCase();
+      return status === 'pending' || status === 'under_review' ? count + 1 : count;
+    }, 0);
+
     const last7Days = [...Array(7)].map((_, i) => {
       const d = new Date();
       d.setDate(d.getDate() - (6 - i));
       return d.toISOString().split('T')[0];
     });
 
-    const submissionTrend = last7Days.map(date => {
-      const count = submissions.filter(s => s.date === date).length;
-      const dayName = new Date(date).toLocaleDateString('en-US', { weekday: 'short' });
-      return { name: dayName, entries: count };
-    });
+    const submissionsByDay = submissions.reduce((acc: Record<string, number>, submission: any) => {
+      if (!submission.submitted_at) {
+        return acc;
+      }
+      const key = new Date(submission.submitted_at).toISOString().split('T')[0];
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
 
-    // Calculate Category Split
-    const categoryCounts: Record<string, number> = {};
-    submissions.forEach(s => {
-      categoryCounts[s.category] = (categoryCounts[s.category] || 0) + 1;
-    });
+    const submissionTrend = last7Days.map((date) => ({
+      name: new Date(date).toLocaleDateString('en-US', { weekday: 'short' }),
+      entries: submissionsByDay[date] || 0,
+    }));
 
-    const categorySplit = Object.entries(categoryCounts)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
+    const categoryIdCounts = submissions.reduce((acc: Record<string, number>, submission: any) => {
+      const categoryId = submission.category_id || 'uncategorized';
+      acc[categoryId] = (acc[categoryId] || 0) + 1;
+      return acc;
+    }, {});
+
+    const sortedCategoryEntries = Object.entries(categoryIdCounts)
+      .sort((a, b) => b[1] - a[1])
       .slice(0, 4);
 
+    const topCategoryIds = sortedCategoryEntries
+      .map(([id]) => id)
+      .filter((id) => id !== 'uncategorized');
+
+    let categoryTitleMap: Record<string, string> = {};
+    if (topCategoryIds.length > 0) {
+      const { data: categoriesData } = await supabase
+        .from('categories')
+        .select('id, title')
+        .in('id', topCategoryIds);
+
+      categoryTitleMap = (categoriesData || []).reduce((acc: Record<string, string>, category: any) => {
+        acc[category.id] = category.title || 'Untitled';
+        return acc;
+      }, {});
+    }
+
+    const categorySplit = sortedCategoryEntries.map(([id, value]) => ({
+      name: id === 'uncategorized' ? 'Uncategorized' : (categoryTitleMap[id] || 'Uncategorized'),
+      value,
+    }));
+
     return {
-      totalSubmissions: submissions.length,
-      activePrograms: activePrograms.length,
-      pendingReview: submissions.filter(s =>
-        s.status === 'Pending' || s.status === 'Under Review'
-      ).length,
-      revenue: await this.calculateRevenue(programId),
-      activeJudges: judges.filter(j => j.status === 'Active').length,
+      totalSubmissions,
+      activePrograms: activeProgramsCount || 0,
+      pendingReview,
+      revenue,
+      activeJudges: activeJudgesCount || 0,
       submissionTrend,
-      categorySplit
+      categorySplit,
     };
   }
 

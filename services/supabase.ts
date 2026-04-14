@@ -33,22 +33,122 @@ export const isSupabaseReady = () => supabase !== null;
 // HELPER FUNCTIONS FOR USER/ORG CONTEXT
 // ============================================================================
 
+const USER_CONTEXT_TTL_MS = 45_000;
+const ORG_DETAILS_TTL_MS = 45_000;
+
+type CachedUserContext = {
+  userId: string | null;
+  orgId: string | null;
+  fetchedAt: number;
+};
+
+type OrganizationSummary = {
+  id: string;
+  name?: string | null;
+  slug?: string | null;
+  logo_url?: string | null;
+  website?: string | null;
+  industry?: string | null;
+  plan?: string | null;
+};
+
+type CachedOrganizationDetails = {
+  orgId: string;
+  data: OrganizationSummary;
+  fetchedAt: number;
+};
+
+let cachedUserContext: CachedUserContext | null = null;
+let cachedUserContextPromise: Promise<CachedUserContext> | null = null;
+let cachedOrganizationDetails: CachedOrganizationDetails | null = null;
+
+const resolveUserContext = async (forceRefresh = false): Promise<CachedUserContext> => {
+  if (!supabase) {
+    return { userId: null, orgId: null, fetchedAt: Date.now() };
+  }
+
+  const now = Date.now();
+  if (!forceRefresh && cachedUserContext && now - cachedUserContext.fetchedAt < USER_CONTEXT_TTL_MS) {
+    return cachedUserContext;
+  }
+
+  if (!forceRefresh && cachedUserContextPromise) {
+    return cachedUserContextPromise;
+  }
+
+  const resolver = (async (): Promise<CachedUserContext> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    let userId = session?.user?.id || null;
+
+    if (!userId) {
+      const { data: { user } } = await supabase.auth.getUser();
+      userId = user?.id || null;
+    }
+
+    if (!userId) {
+      const next = { userId: null, orgId: null, fetchedAt: Date.now() };
+      cachedUserContext = next;
+      return next;
+    }
+
+    let orgId: string | null = null;
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('organization_id')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (!profileError && profile?.organization_id) {
+      orgId = profile.organization_id;
+    }
+
+    if (!orgId) {
+      const { data: membership } = await supabase
+        .from('organization_members')
+        .select('organization_id, joined_at')
+        .eq('user_id', userId)
+        .order('joined_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      orgId = membership?.organization_id || null;
+
+      if (orgId && (!profile || !profile.organization_id)) {
+        void supabase.from('profiles').update({ organization_id: orgId }).eq('id', userId);
+      }
+    }
+
+    const next = { userId, orgId, fetchedAt: Date.now() };
+    cachedUserContext = next;
+    return next;
+  })();
+
+  cachedUserContextPromise = resolver;
+  try {
+    return await resolver;
+  } finally {
+    if (cachedUserContextPromise === resolver) {
+      cachedUserContextPromise = null;
+    }
+  }
+};
+
 // Helper to get current user ID
 export const getCurrentUserId = async (): Promise<string | null> => {
-  if (!supabase) return null;
-  const { user } = await auth.getUser();
-  return user?.id || null;
+  const context = await resolveUserContext();
+  return context.userId;
 };
 
 // Helper to get current organization ID
 export const getCurrentOrgId = async (): Promise<string | null> => {
-  const org = await organizations.getCurrent();
-  return org.data?.id || null;
+  const context = await resolveUserContext();
+  return context.orgId;
 };
 
 // Clear cache (call on logout or when user changes)
 export const clearUserCache = () => {
-  // No-op: cache removed.
+  cachedUserContext = null;
+  cachedUserContextPromise = null;
+  cachedOrganizationDetails = null;
 };
 
 export const resolveMediaPublicUrl = (value?: string | null): string => {
@@ -147,10 +247,14 @@ export const resolveMediaUrl = async (value?: string | null, expiresIn = 60 * 60
 
 // Refresh cache (call after login or when org changes)
 export const refreshUserCache = async () => {
-  // No-op beyond triggering fresh reads.
-  await getCurrentUserId();
-  await getCurrentOrgId();
+  await resolveUserContext(true);
 };
+
+if (supabase) {
+  supabase.auth.onAuthStateChange(() => {
+    clearUserCache();
+  });
+}
 
 // ============================================================================
 // AUTH HELPERS
@@ -253,6 +357,15 @@ export const auth = {
     if (!supabase) {
       return { user: null, error: { message: 'Supabase is not configured. Please check your environment variables.' } };
     }
+
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) {
+      return { user: null, error: sessionError };
+    }
+    if (session?.user) {
+      return { user: session.user, error: null };
+    }
+
     const { data: { user }, error } = await supabase.auth.getUser();
     return { user, error };
   },
@@ -293,7 +406,10 @@ export const auth = {
     if (!supabase) {
       return { data: { subscription: { unsubscribe: () => { } } } };
     }
-    return supabase.auth.onAuthStateChange(callback);
+    return supabase.auth.onAuthStateChange((event, session) => {
+      clearUserCache();
+      callback(event, session);
+    });
   },
 };
 
@@ -314,6 +430,39 @@ export const organizations = {
 
   getCurrent: async (): Promise<{ data: { id: string } | null; error: any }> => {
     if (!supabase) return { data: null, error: 'Supabase not configured' };
+
+    const context = await resolveUserContext();
+    if (!context.userId) {
+      return { data: null, error: 'Not authenticated' };
+    }
+
+    if (context.orgId) {
+      if (
+        cachedOrganizationDetails &&
+        cachedOrganizationDetails.orgId === context.orgId &&
+        Date.now() - cachedOrganizationDetails.fetchedAt < ORG_DETAILS_TTL_MS
+      ) {
+        return { data: cachedOrganizationDetails.data as { id: string }, error: null };
+      }
+
+      const { data: cachedOrg, error: cachedOrgError } = await supabase
+        .from('organizations')
+        .select('id, name, slug, logo_url, website, industry, plan')
+        .eq('id', context.orgId)
+        .single();
+
+      if (!cachedOrgError && cachedOrg) {
+        cachedOrganizationDetails = {
+          orgId: context.orgId,
+          data: cachedOrg as OrganizationSummary,
+          fetchedAt: Date.now(),
+        };
+        return { data: cachedOrg as { id: string }, error: null };
+      }
+
+      // Cache can get stale if org linkage changed; clear and continue with fallback flow.
+      clearUserCache();
+    }
 
     const { user, error: userError } = await auth.getUser();
     if (userError || !user) return { data: null, error: userError || 'Not authenticated' };
@@ -368,6 +517,11 @@ export const organizations = {
         .single();
 
       if (org) {
+        cachedOrganizationDetails = {
+          orgId: fallbackOrgId,
+          data: org as OrganizationSummary,
+          fetchedAt: Date.now(),
+        };
         return { data: org as { id: string }, error: null };
       }
 
@@ -403,6 +557,11 @@ export const organizations = {
         .single();
 
       if (org) {
+        cachedOrganizationDetails = {
+          orgId: membership.organization_id,
+          data: org as OrganizationSummary,
+          fetchedAt: Date.now(),
+        };
         return { data: org as { id: string }, error: null };
       }
 
@@ -419,6 +578,12 @@ export const organizations = {
     if (orgError || !org) {
       return { data: null, error: orgError || 'Organization not found' };
     }
+
+    cachedOrganizationDetails = {
+      orgId: profile.organization_id,
+      data: org as OrganizationSummary,
+      fetchedAt: Date.now(),
+    };
 
     return { data: org as { id: string }, error: null };
   },
@@ -1075,9 +1240,12 @@ export const submissions = {
     category_id?: string;
     title: string;
     description?: string;
+    status?: string;
     payment_status?: string;
     payment_amount?: number;
     payment_id?: string;
+    applicant_name?: string;
+    applicant_email?: string;
     submission_data?: Record<string, any>;
     allowPublicSubmission?: boolean; // Flag for public form submissions (not a DB column)
   }) => {
@@ -2834,7 +3002,7 @@ export const roundSubmissions = {
       .from('round_submissions')
       .select(`
         *,
-        submissions(id, title, description, cover_image_url, status, average_score, votes_count, applicant_name, applicant_email, category_id, submission_data, submission_judges(judge_id))
+        submissions(id, title, description, cover_image_url, status, average_score, votes_count, applicant_name, applicant_email, category_id, submission_data, submission_judges(judge_id,status,completed_at,round_id))
       `)
       .eq('round_id', roundId)
       .order('enrolled_at', { ascending: true });

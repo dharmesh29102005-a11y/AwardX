@@ -16,6 +16,11 @@ export const FormBuilderWithSelector: React.FC<FormBuilderWithSelectorProps> = (
   const [currentFormFields, setCurrentFormFields] = useState<FormField[]>([]);
   const [currentPages, setCurrentPages] = useState<FormPage[]>([]);
   const [currentTheme, setCurrentTheme] = useState<FormTheme | undefined>(undefined);
+  const [allowMultipleNominations, setAllowMultipleNominations] = useState(false);
+  const [maxNominationsPerPerson, setMaxNominationsPerPerson] = useState(1);
+  const [autoAcceptSubmissions, setAutoAcceptSubmissions] = useState(true);
+  const [isSavingFormSettings, setIsSavingFormSettings] = useState(false);
+  const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (activeEvent) {
@@ -56,11 +61,21 @@ export const FormBuilderWithSelector: React.FC<FormBuilderWithSelectorProps> = (
       };
     });
 
-    const form = (savedForms as any[]).find(f => f.id === formId);
+    const fallbackForms = activeEvent ? await db.getForms(activeEvent.id) : [];
+    const form = (savedForms as any[]).find(f => f.id === formId)
+      || (fallbackForms as any[]).find((f: any) => f.id === formId);
+
+    const allowMultiple = !!(form as any)?.allow_multiple_nominations;
+    const maxNominations = Math.max(1, Number((form as any)?.max_nominations_per_person || 1));
+    const autoAccept = (form as any)?.auto_accept_submissions !== false;
 
     setCurrentFormFields(formFields);
     setCurrentPages(form?.pages || []);
     setCurrentTheme(form?.theme);
+    setAllowMultipleNominations(allowMultiple);
+    setMaxNominationsPerPerson(maxNominations);
+    setAutoAcceptSubmissions(autoAccept);
+    setSettingsMessage(null);
     setSelectedFormId(formId);
     if (onFormSelect) onFormSelect(formId);
     if (activeEvent) localStorage.setItem(`selected_form_${activeEvent.id}`, formId);
@@ -68,6 +83,37 @@ export const FormBuilderWithSelector: React.FC<FormBuilderWithSelectorProps> = (
 
   const handleFormSelect = (formId: string) => {
     void loadForm(formId);
+  };
+
+  const handleSaveFormSettings = async () => {
+    if (!selectedFormId) return;
+    setIsSavingFormSettings(true);
+    setSettingsMessage(null);
+    try {
+      await db.updateForm(selectedFormId, {
+        allow_multiple_nominations: allowMultipleNominations,
+        max_nominations_per_person: Math.max(1, maxNominationsPerPerson),
+        auto_accept_submissions: autoAcceptSubmissions,
+      });
+
+      setSavedForms((prev) => prev.map((form) => (
+        form.id === selectedFormId
+          ? {
+              ...form,
+              allow_multiple_nominations: allowMultipleNominations,
+              max_nominations_per_person: Math.max(1, maxNominationsPerPerson),
+              auto_accept_submissions: autoAcceptSubmissions,
+            }
+          : form
+      )));
+
+      setSettingsMessage('Form settings updated.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update form settings.';
+      setSettingsMessage(message);
+    } finally {
+      setIsSavingFormSettings(false);
+    }
   };
 
 
@@ -139,6 +185,68 @@ export const FormBuilderWithSelector: React.FC<FormBuilderWithSelectorProps> = (
             Go to <strong>Form Builder</strong> in the sidebar
           </p>
         </div>
+
+        {selectedFormId && (
+          <div className="mt-6 pt-6 border-t border-slate-200 space-y-4">
+            <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Nomination Rules</h4>
+
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={allowMultipleNominations}
+                onChange={(e) => {
+                  setAllowMultipleNominations(e.target.checked);
+                  if (!e.target.checked) {
+                    setMaxNominationsPerPerson(1);
+                  }
+                }}
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <div>
+                <p className="text-xs font-semibold text-slate-800">Allow Multiple Nominations</p>
+                <p className="text-[11px] text-slate-500">When disabled, each person can submit only once.</p>
+              </div>
+            </label>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Max Nominations Per Person</label>
+              <input
+                type="number"
+                min={1}
+                value={maxNominationsPerPerson}
+                disabled={!allowMultipleNominations}
+                onChange={(e) => setMaxNominationsPerPerson(Math.max(1, Number(e.target.value) || 1))}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+              />
+            </div>
+
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoAcceptSubmissions}
+                onChange={(e) => setAutoAcceptSubmissions(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <div>
+                <p className="text-xs font-semibold text-slate-800">Auto-Accept Submissions</p>
+                <p className="text-[11px] text-slate-500">Accepted status is applied automatically at submit time.</p>
+              </div>
+            </label>
+
+            <button
+              type="button"
+              onClick={handleSaveFormSettings}
+              disabled={isSavingFormSettings}
+              className="w-full rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 transition-colors hover:bg-indigo-100 disabled:opacity-50"
+            >
+              {isSavingFormSettings ? 'Saving...' : 'Save Form Rules'}
+            </button>
+
+            {settingsMessage && (
+              <p className="text-[11px] text-slate-500">{settingsMessage}</p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Form Preview */}

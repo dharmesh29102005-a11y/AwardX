@@ -184,6 +184,18 @@ CREATE TABLE public.form_analytics (
   CONSTRAINT form_analytics_form_id_fkey FOREIGN KEY (form_id) REFERENCES public.program_forms(id),
   CONSTRAINT form_analytics_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
 );
+CREATE TABLE public.form_payment_configs (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  form_id uuid NOT NULL UNIQUE,
+  field_id character varying NOT NULL,
+  provider character varying NOT NULL DEFAULT 'Razorpay'::character varying CHECK (provider::text = ANY (ARRAY['Stripe'::character varying, 'PayPal'::character varying, 'Razorpay'::character varying]::text[])),
+  amount numeric NOT NULL DEFAULT 0 CHECK (amount >= 0::numeric),
+  currency character varying NOT NULL DEFAULT 'INR'::character varying,
+  description text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT form_payment_configs_pkey PRIMARY KEY (id),
+  CONSTRAINT form_payment_configs_form_id_fkey FOREIGN KEY (form_id) REFERENCES public.program_forms(id)
+);
 CREATE TABLE public.how_it_works_steps (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   step_number integer NOT NULL,
@@ -445,6 +457,7 @@ CREATE TABLE public.program_form_fields (
   sort_order integer DEFAULT 0,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  field_key character varying,
   CONSTRAINT program_form_fields_pkey PRIMARY KEY (id),
   CONSTRAINT program_form_fields_form_id_fkey FOREIGN KEY (form_id) REFERENCES public.program_forms(id)
 );
@@ -511,6 +524,7 @@ CREATE TABLE public.program_payment_configs (
   provider_account_id text,
   onboarding_completed boolean NOT NULL DEFAULT false,
   provider_metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  secret_key text,
   CONSTRAINT program_payment_configs_pkey PRIMARY KEY (id),
   CONSTRAINT program_payment_configs_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id)
 );
@@ -611,6 +625,25 @@ CREATE TABLE public.public_votes (
   CONSTRAINT public_votes_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id),
   CONSTRAINT public_votes_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id),
   CONSTRAINT public_votes_round_id_fkey FOREIGN KEY (round_id) REFERENCES public.rounds(id)
+);
+CREATE TABLE public.razorpay_orders (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  submission_id uuid,
+  program_id uuid NOT NULL,
+  razorpay_order_id character varying NOT NULL UNIQUE,
+  razorpay_payment_id character varying,
+  razorpay_signature character varying,
+  amount numeric NOT NULL,
+  currency character varying NOT NULL DEFAULT 'INR'::character varying,
+  status character varying NOT NULL DEFAULT 'created'::character varying CHECK (status::text = ANY (ARRAY['created'::character varying, 'paid'::character varying, 'failed'::character varying, 'refunded'::character varying]::text[])),
+  payer_email character varying,
+  payer_name character varying,
+  metadata jsonb DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  paid_at timestamp with time zone,
+  CONSTRAINT razorpay_orders_pkey PRIMARY KEY (id),
+  CONSTRAINT razorpay_orders_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id),
+  CONSTRAINT razorpay_orders_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id)
 );
 CREATE TABLE public.role_permissions (
   role_id uuid NOT NULL,

@@ -55,6 +55,12 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
     return streams;
   }, [incomingEdges]);
 
+  const parentRoundOptions = React.useMemo(() => {
+    return [...allRounds]
+      .filter((candidate) => candidate.id !== formData.id)
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }, [allRounds, formData.id]);
+
   // Sync formData when round prop changes
   useEffect(() => {
     setFormData(round);
@@ -275,7 +281,7 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
                       onClick={() => {
                         let condition: StartCondition;
                         if (type === 'fixed_datetime') condition = { type: 'fixed_datetime', datetime: new Date().toISOString() };
-                        else if (type === 'after_previous') condition = { type: 'after_previous', roundId: '' };
+                        else if (type === 'after_previous') condition = { type: 'after_previous', roundId: parentRoundOptions[0]?.id || '' };
                         else condition = { type: 'manual_trigger' };
                         handleStartConditionChange(condition);
                       }}
@@ -293,6 +299,28 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
                       onChange={(e) => handleStartConditionChange({ type: 'fixed_datetime', datetime: new Date(e.target.value).toISOString() })}
                       className="w-full px-4 py-3 bg-white border border-slate-200/60 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 outline-none text-sm font-medium transition-all"
                     />
+                  </motion.div>
+                )}
+                {formData.startCondition.type === 'after_previous' && (
+                  <motion.div initial={{ y: -10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="space-y-2">
+                    <select
+                      value={formData.startCondition.roundId}
+                      onChange={(e) => handleStartConditionChange({ type: 'after_previous', roundId: e.target.value })}
+                      className="w-full px-4 py-3 bg-white border border-slate-200/60 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 outline-none text-sm font-medium transition-all appearance-none"
+                    >
+                      {parentRoundOptions.length === 0 ? (
+                        <option value="">No parent round available</option>
+                      ) : (
+                        parentRoundOptions.map((candidate) => (
+                          <option key={candidate.id} value={candidate.id}>
+                            {candidate.name}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    <p className="text-[10px] text-slate-500 px-1">
+                      This round will start only after the selected parent round is completed.
+                    </p>
                   </motion.div>
                 )}
               </div>

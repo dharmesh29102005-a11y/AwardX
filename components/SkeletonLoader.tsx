@@ -2,10 +2,16 @@ import React from 'react';
 
 type SkeletonLoaderProps = {
   className?: string;
+  style?: React.CSSProperties;
 };
 
-export const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({ className = '' }) => {
-  return <div className={`animate-pulse rounded-xl bg-gradient-to-r from-slate-200/70 via-slate-100/70 to-slate-200/70 bg-[length:200%_100%] ${className}`} style={{ animation: 'shimmer 1.5s ease-in-out infinite' }} />;
+export const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({ className = '', style }) => {
+  return (
+    <div
+      className={`animate-pulse rounded-xl bg-gradient-to-r from-slate-200/70 via-slate-100/70 to-slate-200/70 bg-[length:200%_100%] ${className}`}
+      style={{ animation: 'shimmer 1.5s ease-in-out infinite', ...style }}
+    />
+  );
 };
 
 export const TableSkeleton: React.FC<{ rows?: number; columns?: number }> = ({ rows = 6, columns = 6 }) => {

@@ -23,6 +23,7 @@ interface RoundJudgeInsight {
   name: string;
   avatarUrl?: string;
   email?: string;
+  scoreStatus: 'scored' | 'pending';
 }
 
 interface RoundCardInsight {
@@ -111,6 +112,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
           name: judge.name,
           avatarUrl: judge.avatar,
           email: judge.email,
+          scoreStatus: 'pending' as const,
         }])
       );
 
@@ -151,15 +153,36 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
           });
 
           const judgeIds = new Set<string>();
+          const judgeAssignmentProgress = new Map<string, { total: number; completed: number }>();
           data.forEach((row: any) => {
             const submissionJudges = row.submissions?.submission_judges || [];
             submissionJudges.forEach((judgeRef: any) => {
-              if (judgeRef?.judge_id) judgeIds.add(judgeRef.judge_id);
+              if (!judgeRef?.judge_id) return;
+              if (judgeRef.round_id && judgeRef.round_id !== round.id) return;
+
+              judgeIds.add(judgeRef.judge_id);
+
+              const current = judgeAssignmentProgress.get(judgeRef.judge_id) || { total: 0, completed: 0 };
+              current.total += 1;
+              const isCompleted = String(judgeRef.status || '').toLowerCase() === 'completed' || Boolean(judgeRef.completed_at);
+              if (isCompleted) current.completed += 1;
+              judgeAssignmentProgress.set(judgeRef.judge_id, current);
             });
           });
 
           const assignedRoundJudges: RoundJudgeInsight[] = Array.from(judgeIds)
-            .map(judgeId => judgeMap.get(judgeId))
+            .map(judgeId => {
+              const judge = judgeMap.get(judgeId);
+              if (!judge) return null;
+              const progress = judgeAssignmentProgress.get(judgeId);
+              const scoreStatus: RoundJudgeInsight['scoreStatus'] = progress && progress.total > 0 && progress.completed === progress.total
+                ? 'scored'
+                : 'pending';
+              return {
+                ...judge,
+                scoreStatus,
+              };
+            })
             .filter(Boolean) as RoundJudgeInsight[];
 
           let roundJudges: RoundJudgeInsight[] = assignedRoundJudges;
@@ -171,6 +194,10 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
               name: judge.name,
               avatarUrl: judge.avatar,
               email: judge.email,
+              scoreStatus: (() => {
+                const progress = judgeAssignmentProgress.get(judge.id);
+                return progress && progress.total > 0 && progress.completed === progress.total ? 'scored' : 'pending';
+              })(),
             }));
           } else if (roundJudges.length === 0) {
             // Fallback for partially configured rounds where assignment rows are not yet present.
@@ -179,6 +206,10 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
               name: judge.name,
               avatarUrl: judge.avatar,
               email: judge.email,
+              scoreStatus: (() => {
+                const progress = judgeAssignmentProgress.get(judge.id);
+                return progress && progress.total > 0 && progress.completed === progress.total ? 'scored' : 'pending';
+              })(),
             }));
           }
 
@@ -343,6 +374,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
   const handleAdvanceRound = useCallback(async (roundId: string) => {
     const currentRound = rounds.find(r => r.id === roundId);
     if (!currentRound) return;
+    if (currentRound.status === 'completed') return;
 
     const sortedRounds = [...rounds].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     const currentIndex = sortedRounds.findIndex(r => r.id === roundId);

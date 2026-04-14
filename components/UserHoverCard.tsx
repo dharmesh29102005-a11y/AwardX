@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Calendar } from 'lucide-react';
 
@@ -16,15 +16,29 @@ interface UserHoverCardProps {
 
 export const UserHoverCard: React.FC<UserHoverCardProps> = ({ user, children }) => {
   const [isHovered, setIsHovered] = useState(false);
-  let timeout: any;
+   const hoverTimeoutRef = useRef<number | null>(null);
+
+   useEffect(() => {
+      return () => {
+         if (hoverTimeoutRef.current) {
+            window.clearTimeout(hoverTimeoutRef.current);
+         }
+      };
+   }, []);
 
   const handleMouseEnter = () => {
-    clearTimeout(timeout);
+      if (hoverTimeoutRef.current) {
+         window.clearTimeout(hoverTimeoutRef.current);
+         hoverTimeoutRef.current = null;
+      }
     setIsHovered(true);
   };
 
   const handleMouseLeave = () => {
-    timeout = setTimeout(() => setIsHovered(false), 300);
+      hoverTimeoutRef.current = window.setTimeout(() => {
+         setIsHovered(false);
+         hoverTimeoutRef.current = null;
+      }, 180);
   };
 
   return (

@@ -31,6 +31,14 @@ const RouteLoader: React.FC = () => (
   </div>
 );
 
+const preloadLikelyNextRoutes = () => {
+  void Promise.all([
+    import('./components/pages/LoginPage'),
+    import('./components/pages/SignupPage'),
+    import('./components/dashboard/Dashboard'),
+  ]);
+};
+
 const pageToPath = (page: string): string => {
   if (!page) return '/';
 
@@ -113,6 +121,27 @@ const MarketingLayout: React.FC<React.PropsWithChildren> = ({ children }) => {
 const App: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    let timeoutId: number | null = null;
+    const idleHandle =
+      typeof window !== 'undefined' && 'requestIdleCallback' in window
+        ? (window as any).requestIdleCallback(preloadLikelyNextRoutes, { timeout: 1200 })
+        : null;
+
+    if (idleHandle == null) {
+      timeoutId = window.setTimeout(preloadLikelyNextRoutes, 1200);
+    }
+
+    return () => {
+      if (idleHandle != null && typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
+        (window as any).cancelIdleCallback(idleHandle);
+      }
+      if (timeoutId != null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);

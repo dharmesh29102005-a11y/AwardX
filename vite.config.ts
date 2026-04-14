@@ -30,6 +30,40 @@ export default defineConfig(({ mode }) => {
         },
       },
       plugins: [tailwindcss(), react()],
+      optimizeDeps: {
+        include: ['react', 'react-dom', 'react-router-dom', '@tanstack/react-query'],
+      },
+      build: {
+        target: 'es2020',
+        cssMinify: 'esbuild',
+        rollupOptions: {
+          output: {
+            manualChunks(id) {
+              if (!id.includes('node_modules')) {
+                return undefined;
+              }
+              if (id.includes('@supabase')) {
+                return 'vendor-supabase';
+              }
+              if (id.includes('framer-motion') || id.includes('recharts')) {
+                return 'vendor-ui-motion';
+              }
+              if (id.includes('@radix-ui') || id.includes('lucide-react')) {
+                return 'vendor-ui-kit';
+              }
+              if (
+                id.includes('react-router')
+                || id.includes('@tanstack/react-query')
+                || id.includes('react-dom')
+                || id.includes('/react/')
+              ) {
+                return 'vendor-react-core';
+              }
+              return undefined;
+            },
+          },
+        },
+      },
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),

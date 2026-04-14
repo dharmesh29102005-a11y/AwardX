@@ -147,6 +147,28 @@ body {
   overflow-x: hidden;
 }
 
+@keyframes button-tap-bounce {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(0.94);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+button:not(:disabled):active {
+  animation: button-tap-bounce 180ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):active {
+    animation: none;
+  }
+}
+
 input,
 select,
 textarea {

@@ -1,5 +1,5 @@
 
-import React, { Suspense, lazy, useEffect, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { DashboardLayout } from './DashboardLayout';
 import { EventSelectionView } from './EventSelectionView';
@@ -47,6 +47,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [isInitializing, setIsInitializing] = useState(true);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const persistTimerRef = useRef<number | null>(null);
+  const lastPersistKeyRef = useRef<string>('');
 
   // Sync URL → state on mount
   useEffect(() => {
@@ -67,10 +69,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             setCurrentView(urlView);
           }
 
-          const { user } = await auth.getUser();
-          if (user) {
-            const programs = await databaseService.getPrograms();
+          const [{ user }, programs] = await Promise.all([
+            auth.getUser(),
+            databaseService.getPrograms(),
+          ]);
 
+          if (user) {
             // URL program param takes priority over persisted workspace
             if (urlProgram) {
               const fromUrl = programs.find(p => p.id === urlProgram);
@@ -124,20 +128,37 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       navigate({ search: newSearch ? `?${newSearch}` : '' }, { replace: true });
     }
 
-    const persistState = async () => {
+    if (persistTimerRef.current != null) {
+      window.clearTimeout(persistTimerRef.current);
+    }
+
+    persistTimerRef.current = window.setTimeout(async () => {
       try {
         const { user } = await auth.getUser();
-        if (user) {
-          await workspaceState.save(user.id, {
-            active_program_id: activeEvent?.id || null,
-            current_view: currentView,
-          });
+        if (!user) {
+          return;
         }
+
+        const nextPersistKey = `${user.id}:${activeEvent?.id || 'none'}:${currentView}`;
+        if (lastPersistKeyRef.current === nextPersistKey) {
+          return;
+        }
+
+        await workspaceState.save(user.id, {
+          active_program_id: activeEvent?.id || null,
+          current_view: currentView,
+        });
+        lastPersistKeyRef.current = nextPersistKey;
       } catch {
         // Non-critical
       }
+    }, 250);
+
+    return () => {
+      if (persistTimerRef.current != null) {
+        window.clearTimeout(persistTimerRef.current);
+      }
     };
-    persistState();
   }, [activeEvent, currentView]);
 
   const renderView = () => {

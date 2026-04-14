@@ -628,18 +628,33 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                     <div className="mt-3 space-y-2 max-h-56 overflow-auto pr-1">
                         {requestTraces.map((trace, idx) => (
                             <div key={`${trace.startedAt}-${trace.url}-${idx}`} className="rounded-lg border border-slate-200 p-2 bg-slate-50/50">
-                                <div className="flex items-center justify-between gap-2 text-[11px]">
-                                    <span className="font-semibold text-slate-700">{trace.method} {trace.path}</span>
-                                    <span className={`px-1.5 py-0.5 rounded font-semibold ${trace.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                                        {trace.status ?? 'NETWORK'}
-                                    </span>
-                                </div>
-                                <p className="text-[11px] text-slate-700 mt-1 break-all">{trace.url}</p>
-                                <p className="text-[11px] text-slate-600 mt-1 break-all">
-                                    body: {JSON.stringify(trace.requestBody)}
-                                </p>
-                                {trace.error && <p className="text-[11px] text-rose-700 mt-1">{trace.error}</p>}
-                                <p className="text-[10px] text-slate-500 mt-1">Attempt {trace.attempt} at {new Date(trace.startedAt).toLocaleTimeString()}</p>
+                                {(() => {
+                                    const body = (trace.requestBody || {}) as Record<string, unknown>;
+                                    const recipient = typeof body.email === 'string' ? body.email : 'Unknown recipient';
+                                    const token = typeof body.token === 'string' ? body.token : null;
+                                    const inviteLink = token ? `${siteOrigin}/team-invite/${token}` : null;
+
+                                    return (
+                                        <>
+                                            <div className="flex items-center justify-between gap-2 text-[11px]">
+                                                <span className="font-semibold text-slate-700">{trace.method} {trace.path}</span>
+                                                <span className={`px-1.5 py-0.5 rounded font-semibold ${trace.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                                                    {trace.status ?? 'NETWORK'}
+                                                </span>
+                                            </div>
+                                            <p className="text-[11px] text-slate-700 mt-1">
+                                                Email: <span className="font-semibold">{recipient}</span>
+                                            </p>
+                                            {inviteLink && (
+                                                <p className="text-[11px] text-slate-600 mt-1 break-all">
+                                                    Link: {inviteLink}
+                                                </p>
+                                            )}
+                                            {trace.error && <p className="text-[11px] text-rose-700 mt-1">{trace.error}</p>}
+                                            <p className="text-[10px] text-slate-500 mt-1">Attempt {trace.attempt} at {new Date(trace.startedAt).toLocaleTimeString()}</p>
+                                        </>
+                                    );
+                                })()}
                             </div>
                         ))}
                     </div>
