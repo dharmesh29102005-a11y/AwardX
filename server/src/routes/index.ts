@@ -10,7 +10,6 @@ import publicVotingRouter from './publicVoting.js';
 import advancementRouter from './advancement.js';
 import leaderboardRouter from './leaderboard.js';
 import massEmailRouter from './massEmail.js';
-import invitesRouter from './invites.js';
 
 const router = Router();
 
@@ -25,6 +24,6 @@ router.use('/voting', publicVotingRouter);
 router.use('/advancement', advancementRouter);
 router.use('/leaderboard', leaderboardRouter);
 router.use('/mass-email', massEmailRouter);
-router.use('/invites', invitesRouter);
+// Invites: handled by Vercel-native handlers in api/_handlers (rate limits, validation).
 
 export default router;

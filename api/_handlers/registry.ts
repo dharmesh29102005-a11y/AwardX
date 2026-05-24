@@ -26,6 +26,7 @@ import invitesTeam from './invites/team';
 import invitesVerifyJudge from './invites/verify-judge';
 import invitesVerifyTeam from './invites/verify-team';
 import scoresJudgeSubmit from './scores/judge-submit';
+import { overviewPublicByProgramId, overviewPublicBySlug } from './overview/public';
 
 const routes: Record<string, RouteEntry> = {
   health: { GET: health },
@@ -51,8 +52,24 @@ const routes: Record<string, RouteEntry> = {
 export function resolveHandler(path: string, method: string): ApiHandler | null {
   const normalizedPath = path.replace(/^\/+|\/+$/g, '') || 'health';
   const route = routes[normalizedPath];
-  if (!route) return null;
+  if (route) {
+    const handler = route[method as keyof RouteEntry];
+    if (handler) return handler;
+  }
 
-  const handler = route[method as keyof RouteEntry];
-  return handler || null;
+  if (method === 'GET') {
+    const bySlugMatch = normalizedPath.match(/^overview\/public\/by-slug\/(.+)$/);
+    if (bySlugMatch) {
+      const slug = decodeURIComponent(bySlugMatch[1]);
+      return (req, res) => overviewPublicBySlug(req, res, slug);
+    }
+
+    const byProgramMatch = normalizedPath.match(/^overview\/public\/([^/]+)$/);
+    if (byProgramMatch) {
+      const programId = decodeURIComponent(byProgramMatch[1]);
+      return (req, res) => overviewPublicByProgramId(req, res, programId);
+    }
+  }
+
+  return null;
 }

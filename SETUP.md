@@ -83,24 +83,28 @@ npm install
 
 ## Step 5: Run the Application
 
-Start the frontend and Express API together:
+Start the frontend and API together (same routes as Vercel production):
 
 ```bash
-npm run dev:all
+npm run dev
 ```
 
-(`npm run dev` is an alias for the same command.)
+This runs:
 
-This runs Vite on `http://localhost:3000` and the backend on `http://localhost:5001` (Vite proxies `/api/*` to the backend).
+- Vite on `http://localhost:3000`
+- Local API shim on `http://localhost:5001` (`scripts/dev-api-server.ts` → `api/[...path].ts` + Express route bridge)
 
-- Frontend only: `npm run dev:client`
-- Backend only: `npm run dev:server`
+Vite proxies `/api/*` to port 5001. There is **no separate Express deploy** — production uses Vercel serverless.
+
+- Frontend only: `npm run dev:client` (API calls will fail unless you also run `npm run dev:api`)
+- API shim only: `npm run dev:api`
+- Full Vercel-like dev: `npm run dev:vercel` (requires Vercel CLI)
 
 **Local env tips**
 
-- Leave `VITE_BACKEND_URL` empty in development so requests use the Vite proxy.
-- Set `PORT=5001` in `server/.env` (port 5000 is often used by macOS AirPlay).
-- Match `VITE_BACKEND_PROXY_TARGET` to your backend `PORT` if you change it.
+- Leave `VITE_BACKEND_URL` empty so requests use the Vite proxy.
+- Default API port is `5001` (avoid 5000 on macOS — AirPlay).
+- Optional: set `CRON_SECRET` and call `GET http://localhost:5001/api/cron/round-scheduler?secret=...` to test the scheduler tick.
 
 The application will be available at `http://localhost:3000`
 
@@ -140,8 +144,37 @@ RLS is enabled on all sensitive tables. Basic policies are included, but you sho
 8. Health check endpoint for uptime monitoring is `/api/health`
 9. Configure GitHub secret `UPTIME_BASE_URL` to enable scheduled checks in `.github/workflows/uptime-monitor.yml`
 10. Set `VITE_SENTRY_DSN` in production environment variables to enable frontend error monitoring
-11. Deploy the Express server (`server/`) for overview/public pages, or set `VITE_BACKEND_URL` to that host in production
+11. All `/api/*` routes deploy with the same Vercel project — no separate Express host
 12. Configure additional OAuth providers (GitHub, LinkedIn) if needed
+
+## Production deployment (Vercel — awardx.one)
+
+Use **one Vercel project** for the frontend + all API routes.
+
+| Setting | Value |
+|--------|--------|
+| Build command | `npm run build` |
+| Output directory | `dist` |
+| Install command | `npm install` |
+
+Do **not** run `npm run dev` or `npm start` on Vercel — those are local only.
+
+**How API routing works**
+
+1. `api/[...path].ts` — Vercel serverless entry for `/api/*`
+2. Native handlers in `api/_handlers/` (invites, payments, webhooks, public overview, …)
+3. Everything else is served via the Express route modules in `server/src/routes/` (same process, per request — no separate server host)
+
+**Round scheduler:** Vercel Cron hits `/api/cron/round-scheduler` every minute (`vercel.json`). Set `CRON_SECRET` in Vercel and configure the cron job to send `Authorization: Bearer <CRON_SECRET>` (or `?secret=` for manual tests).
+
+**Environment variables (Vercel dashboard)**
+
+- `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_SITE_URL=https://awardx.one`
+- `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (required for dashboard + overview routes)
+- `RESEND_API_KEY`, Stripe/Razorpay keys as needed
+- `CRON_SECRET` (recommended for scheduler cron)
+- **`VITE_BACKEND_URL` — leave empty** (same-origin `/api/*`). Never set to `localhost` in production.
+- Optional Redis: `REDIS_ENABLED=true`, `REDIS_URL`, …
 
 ## Troubleshooting
 
@@ -163,5 +196,11 @@ RLS is enabled on all sensitive tables. Basic policies are included, but you sho
 - Ensure `.env` file is in the root directory
 - Restart the development server after changing `.env`
 - Verify variable names use `VITE_` prefix
+
+### `ERR_CONNECTION_REFUSED` on `/api/overview/...`
+
+**Local:** Run `npm run dev` (client + API shim). `npm run dev:client` alone leaves nothing behind the Vite proxy.
+
+**Production (awardx.one):** Remove `VITE_BACKEND_URL` if it points at `localhost`. Redeploy after changing env vars (Vite bakes `VITE_*` at build time).
 
 

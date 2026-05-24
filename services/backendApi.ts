@@ -1,6 +1,18 @@
 import { auth } from './supabase';
 
-const envBackendUrl = (import.meta.env.VITE_BACKEND_URL || '').trim().replace(/\/$/, '');
+function resolveEnvBackendUrl(): string {
+  const raw = (import.meta.env.VITE_BACKEND_URL || '').trim().replace(/\/$/, '');
+  if (!raw) return '';
+
+  const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(raw);
+  // Production builds must not call the developer machine.
+  if (import.meta.env.PROD && isLocalhost) {
+    return '';
+  }
+  return raw;
+}
+
+const envBackendUrl = resolveEnvBackendUrl();
 
 /** URLs to try: absolute backend (if configured), then same-origin relative path. */
 export function getBackendCandidateUrls(path: string): string[] {
