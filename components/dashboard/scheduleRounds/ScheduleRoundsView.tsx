@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import { Program } from '../../../services/models';
 import { Plus } from 'lucide-react';
 import { Button } from '../../Button';
-import { Round } from '../../../types/scheduleRounds';
+import { Round, RoundEdge } from '../../../types/scheduleRounds';
 import { scheduleRoundsService } from '../../../services/scheduleRoundsDb';
-import { db } from '../../../services/database';
 import { roundSubmissions } from '../../../services/supabase';
 import { RoundScheduler } from './RoundScheduler';
 import { AdvancementPreviewModal } from '../AdvancementPreviewModal';
@@ -38,8 +37,40 @@ type AdvancementModalState = {
   criteriaOverride: AdvancementCriteria;
 };
 
+function hasCustomWorkflowEdges(orderedRounds: Round[], edges: RoundEdge[]): boolean {
+  if (edges.length === 0) return false;
+
+  const realRounds = orderedRounds.filter((round) => !round.id.startsWith('round-'));
+  if (realRounds.length <= 1) {
+    return edges.length > 0;
+  }
+
+  const expectedPairs = new Set<string>();
+  for (let idx = 0; idx < realRounds.length - 1; idx += 1) {
+    expectedPairs.add(`${realRounds[idx].id}->${realRounds[idx + 1].id}`);
+  }
+
+  const seenPairs = new Set<string>();
+  for (const edge of edges) {
+    const conditionType = String((edge.condition as any)?.type || 'always').toLowerCase();
+    if (conditionType !== 'always') {
+      return true;
+    }
+
+    const pair = `${edge.sourceRoundId}->${edge.targetRoundId}`;
+    if (!expectedPairs.has(pair) || seenPairs.has(pair)) {
+      return true;
+    }
+    seenPairs.add(pair);
+  }
+
+  return seenPairs.size !== expectedPairs.size;
+}
+
 export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEvent }) => {
   const [rounds, setRounds] = useState<Round[]>([]);
+  const [roundEdges, setRoundEdges] = useState<RoundEdge[]>([]);
+  const [hasCustomEdges, setHasCustomEdges] = useState(false);
   const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null);
   const [editingRoundId, setEditingRoundId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -47,15 +78,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
   const [isInsightsLoading, setIsInsightsLoading] = useState(false);
   const [pipelineBusyRoundId, setPipelineBusyRoundId] = useState<string | null>(null);
   const [advancementModal, setAdvancementModal] = useState<AdvancementModalState | null>(null);
-
-  const persistLinearEdges = useCallback(
-    async (orderedRounds: Round[]) => {
-      if (!activeEvent) return;
-      const edges = buildLinearEdges(activeEvent.id, orderedRounds);
-      await scheduleRoundsService.saveEdges(activeEvent.id, edges);
-    },
-    [activeEvent],
-  );
+  const customEdgeWarningShown = useRef(false);
 
   const enforceNominationFirst = useCallback(async (inputRounds: Round[]): Promise<Round[]> => {
     const ordered = [...inputRounds].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
@@ -75,6 +98,30 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
 
     return normalized.map((round, index) => ({ ...round, order: index }));
   }, []);
+
+  const persistLinearEdges = useCallback(
+    async (orderedRounds: Round[], options?: { force?: boolean }) => {
+      if (!activeEvent) return false;
+      if (hasCustomEdges && !options?.force) {
+        if (!customEdgeWarningShown.current) {
+          toast.warning('Custom workflow edges detected — linear scheduler changes will not overwrite them.');
+          customEdgeWarningShown.current = true;
+        }
+        return false;
+      }
+
+      const linearEdges = buildLinearEdges(activeEvent.id, orderedRounds);
+      const savedEdges = await scheduleRoundsService.saveEdges(activeEvent.id, linearEdges);
+      const customAfterSave = hasCustomWorkflowEdges(orderedRounds, savedEdges);
+      setRoundEdges(savedEdges);
+      setHasCustomEdges(customAfterSave);
+      if (!customAfterSave) {
+        customEdgeWarningShown.current = false;
+      }
+      return true;
+    },
+    [activeEvent, hasCustomEdges],
+  );
 
   const loadRoundInsights = useCallback(async (targetRounds: Round[]) => {
     if (!activeEvent || targetRounds.length === 0) {
@@ -113,17 +160,36 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
     if (!activeEvent) return;
     setIsLoading(true);
     try {
-      const loadedRounds = await scheduleRoundsService.getRounds(activeEvent.id);
+      const [loadedRounds, loadedEdges] = await Promise.all([
+        scheduleRoundsService.getRounds(activeEvent.id),
+        scheduleRoundsService.getEdges(activeEvent.id).catch((error) => {
+          console.error('Failed to load workflow edges:', error);
+          return [] as RoundEdge[];
+        }),
+      ]);
+
       const normalizedRounds = await enforceNominationFirst(loadedRounds);
+      const customDetected = hasCustomWorkflowEdges(normalizedRounds, loadedEdges);
+
       setRounds(normalizedRounds);
-      await persistLinearEdges(normalizedRounds);
+      setRoundEdges(loadedEdges);
+      setHasCustomEdges(customDetected);
+
+      if (customDetected && !customEdgeWarningShown.current) {
+        toast.warning('Branching/conditional workflow edges detected. Linear edits will preserve them unless you convert.');
+        customEdgeWarningShown.current = true;
+      } else if (!customDetected) {
+        customEdgeWarningShown.current = false;
+      }
     } catch (error) {
       console.error('Failed to load workflow:', error);
       setRounds([]);
+      setRoundEdges([]);
+      setHasCustomEdges(false);
     } finally {
       setIsLoading(false);
     }
-  }, [activeEvent, enforceNominationFirst, persistLinearEdges]);
+  }, [activeEvent, enforceNominationFirst]);
 
   useEffect(() => {
     void loadRoundInsights(rounds);
@@ -150,13 +216,20 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
         });
       }
 
+      let nextRounds: Round[] = [];
       setRounds((prev) => {
-        const next = prev.some((r) => r.id === updatedRound.id)
+        nextRounds = prev.some((r) => r.id === updatedRound.id)
           ? prev.map((r) => (r.id === updatedRound.id ? updatedRound : r))
           : [...prev, updatedRound];
-        void persistLinearEdges(next);
-        return next;
+        return nextRounds;
       });
+
+      try {
+        await persistLinearEdges(nextRounds);
+      } catch (error) {
+        console.error('Failed to persist linear edges after round save:', error);
+        toast.error('Round saved, but workflow connections were not updated.');
+      }
 
       if (round.id.startsWith('round-') && updatedRound.id !== round.id) {
         setSelectedRoundId(updatedRound.id);
@@ -171,11 +244,20 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
       if (!roundId.startsWith('round-')) {
         await scheduleRoundsService.deleteRound(roundId);
       }
+
+      let nextRounds: Round[] = [];
       setRounds((prev) => {
-        const next = prev.filter((r) => r.id !== roundId).map((r, i) => ({ ...r, order: i }));
-        void persistLinearEdges(next);
-        return next;
+        nextRounds = prev.filter((r) => r.id !== roundId).map((r, i) => ({ ...r, order: i }));
+        return nextRounds;
       });
+
+      try {
+        await persistLinearEdges(nextRounds);
+      } catch (error) {
+        console.error('Failed to persist linear edges after round deletion:', error);
+        toast.error('Round deleted, but workflow connections were not updated.');
+      }
+
       setSelectedRoundId((prev) => (prev === roundId ? null : prev));
       setEditingRoundId((prev) => (prev === roundId ? null : prev));
     },
@@ -210,6 +292,26 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
     setSelectedRoundId(newRound.id);
     setEditingRoundId(newRound.id);
   }, [activeEvent, rounds.length, handleRoundUpdate]);
+
+  const handleConvertToLinear = useCallback(async () => {
+    if (!activeEvent) return;
+
+    if (hasCustomEdges) {
+      const confirmed = window.confirm(
+        'This will replace existing branching/conditional workflow edges with a simple linear sequence. Continue?',
+      );
+      if (!confirmed) return;
+    }
+
+    try {
+      const orderedRounds = [...rounds].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      await persistLinearEdges(orderedRounds, { force: true });
+      toast.success('Workflow connections converted to linear sequence.');
+    } catch (error) {
+      console.error('Failed to convert workflow to linear edges:', error);
+      toast.error('Could not convert workflow connections');
+    }
+  }, [activeEvent, hasCustomEdges, rounds, persistLinearEdges]);
 
   const openAdvancementPreview = useCallback(async (round: Round) => {
     const criteriaOverride = shortlistConfigToCriteria(round.shortlistConfig, round.type);
@@ -342,11 +444,23 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
             Linear round scheduler — start each round, then run shortlist to move top entries forward
           </p>
         </div>
-        <Button variant="primary" onClick={createNewRound} className="shadow-lg shadow-indigo-500/20">
-          <Plus className="w-4 h-4 mr-2" />
-          Add round
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleConvertToLinear}>
+            Convert to linear flow
+          </Button>
+          <Button variant="primary" onClick={createNewRound} className="shadow-lg shadow-indigo-500/20">
+            <Plus className="w-4 h-4 mr-2" />
+            Add round
+          </Button>
+        </div>
       </div>
+
+      {hasCustomEdges && (
+        <div className="border-b border-amber-200 bg-amber-50 px-6 py-3 text-sm text-amber-900">
+          Branching or conditional workflow edges are active. Scheduler edits will preserve those edges unless you
+          explicitly convert to linear flow.
+        </div>
+      )}
 
       <div className="flex-1 min-w-0 overflow-hidden">
         <RoundScheduler

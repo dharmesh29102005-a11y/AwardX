@@ -1,9 +1,124 @@
 import { Router } from 'express';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
+import { ensureCanManageProgram } from '../middleware/programManagement.js';
 import { getSupabaseAdmin } from '../supabase.js';
 import { cacheKeys, cacheTtls, deleteCache, wrapWithCache } from '../cache/redisCache.js';
 
 const router = Router();
+const ALLOWED_ROUND_TYPES = new Set([
+  'Nomination',
+  'Shortlisting',
+  'Public Voting',
+  'Public Rating',
+  'Announce',
+  'jury',
+  'public',
+  'hybrid',
+  'compliance',
+  'custom',
+]);
+const ALLOWED_ROUND_STATUSES = new Set(['draft', 'scheduled', 'upcoming', 'active', 'completed', 'cancelled']);
+
+function validationError(fields: Record<string, string>) {
+  return {
+    error: 'Validation failed',
+    fields,
+  };
+}
+
+function asIsoDate(value: unknown) {
+  if (typeof value !== 'string') return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function validateRoundPayload(payload: any, options?: { partial?: boolean }) {
+  const partial = Boolean(options?.partial);
+  const fields: Record<string, string> = {};
+
+  if (!partial || payload.title !== undefined) {
+    if (typeof payload.title !== 'string' || !payload.title.trim()) {
+      fields.title = 'title is required';
+    }
+  }
+
+  if (!partial || payload.type !== undefined) {
+    if (typeof payload.type !== 'string' || !ALLOWED_ROUND_TYPES.has(payload.type)) {
+      fields.type = `type must be one of: ${Array.from(ALLOWED_ROUND_TYPES).join(', ')}`;
+    }
+  }
+
+  if (payload.status !== undefined) {
+    if (typeof payload.status !== 'string' || !ALLOWED_ROUND_STATUSES.has(payload.status)) {
+      fields.status = `status must be one of: ${Array.from(ALLOWED_ROUND_STATUSES).join(', ')}`;
+    }
+  }
+
+  if (payload.description !== undefined && payload.description !== null && typeof payload.description !== 'string') {
+    fields.description = 'description must be a string or null';
+  }
+
+  if (payload.sort_order !== undefined) {
+    const sortOrder = Number(payload.sort_order);
+    if (!Number.isInteger(sortOrder) || sortOrder < 0) {
+      fields.sort_order = 'sort_order must be an integer greater than or equal to 0';
+    }
+  }
+
+  if (payload.settings !== undefined) {
+    if (!payload.settings || typeof payload.settings !== 'object' || Array.isArray(payload.settings)) {
+      fields.settings = 'settings must be an object';
+    }
+  }
+
+  const startDate = payload.start_date !== undefined ? asIsoDate(payload.start_date) : null;
+  const endDate = payload.end_date !== undefined ? asIsoDate(payload.end_date) : null;
+
+  if (payload.start_date !== undefined && !startDate) {
+    fields.start_date = 'start_date must be a valid ISO date string';
+  }
+  if (payload.end_date !== undefined && !endDate) {
+    fields.end_date = 'end_date must be a valid ISO date string';
+  }
+  if (startDate && endDate && startDate.getTime() > endDate.getTime()) {
+    fields.date_range = 'start_date must be earlier than or equal to end_date';
+  }
+
+  return {
+    ok: Object.keys(fields).length === 0,
+    fields,
+  };
+}
+
+function validateEdgesPayload(edges: any[]) {
+  const fields: Record<string, string> = {};
+
+  edges.forEach((edge, idx) => {
+    const prefix = `edges[${idx}]`;
+    if (!edge || typeof edge !== 'object') {
+      fields[prefix] = 'each edge must be an object';
+      return;
+    }
+
+    if (!edge.source_round_id || typeof edge.source_round_id !== 'string') {
+      fields[`${prefix}.source_round_id`] = 'source_round_id is required';
+    }
+    if (!edge.target_round_id || typeof edge.target_round_id !== 'string') {
+      fields[`${prefix}.target_round_id`] = 'target_round_id is required';
+    }
+    if (edge.sort_order !== undefined) {
+      const sortOrder = Number(edge.sort_order);
+      if (!Number.isInteger(sortOrder) || sortOrder < 0) {
+        fields[`${prefix}.sort_order`] = 'sort_order must be an integer greater than or equal to 0';
+      }
+    }
+  });
+
+  return {
+    ok: Object.keys(fields).length === 0,
+    fields,
+  };
+}
 
 function validateEdgesAsDag(roundIds: string[], edges: Array<{ source_round_id?: string; target_round_id?: string }>) {
   const roundIdSet = new Set(roundIds);
@@ -149,15 +264,25 @@ router.get('/:programId/edges', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/:programId/rounds', requireAuth, async (req, res) => {
+router.post('/:programId/rounds', requireAuth, async (req: AuthenticatedRequest, res) => {
   const { programId } = req.params;
   if (!programId) {
     return res.status(400).json({ error: 'programId is required' });
   }
 
   try {
-    const supabase = getSupabaseAdmin();
+    const access = await ensureCanManageProgram(req.userId || '', programId);
+    if (!access.ok) {
+      return res.status(access.status).json({ error: access.error });
+    }
+
     const payload = req.body || {};
+    const validation = validateRoundPayload(payload);
+    if (!validation.ok) {
+      return res.status(400).json(validationError(validation.fields));
+    }
+
+    const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from('rounds')
       .insert({
@@ -185,15 +310,39 @@ router.post('/:programId/rounds', requireAuth, async (req, res) => {
   }
 });
 
-router.put('/:programId/rounds/:id', requireAuth, async (req, res) => {
+router.put('/:programId/rounds/:id', requireAuth, async (req: AuthenticatedRequest, res) => {
   const { programId, id } = req.params;
   if (!programId || !id) {
     return res.status(400).json({ error: 'programId and round id are required' });
   }
 
   try {
-    const supabase = getSupabaseAdmin();
+    const access = await ensureCanManageProgram(req.userId || '', programId);
+    if (!access.ok) {
+      return res.status(access.status).json({ error: access.error });
+    }
+
     const payload = req.body || {};
+    const validation = validateRoundPayload(payload, { partial: true });
+    if (!validation.ok) {
+      return res.status(400).json(validationError(validation.fields));
+    }
+
+    const supabase = getSupabaseAdmin();
+    const { data: existingRound, error: existingRoundError } = await supabase
+      .from('rounds')
+      .select('id')
+      .eq('id', id)
+      .eq('program_id', programId)
+      .maybeSingle();
+
+    if (existingRoundError) {
+      return res.status(500).json({ error: existingRoundError.message || 'Failed to load round' });
+    }
+    if (!existingRound) {
+      return res.status(404).json({ error: 'Round not found' });
+    }
+
     const updates = {
       title: payload.title,
       description: payload.description,
@@ -228,14 +377,32 @@ router.put('/:programId/rounds/:id', requireAuth, async (req, res) => {
   }
 });
 
-router.delete('/:programId/rounds/:id', requireAuth, async (req, res) => {
+router.delete('/:programId/rounds/:id', requireAuth, async (req: AuthenticatedRequest, res) => {
   const { programId, id } = req.params;
   if (!programId || !id) {
     return res.status(400).json({ error: 'programId and round id are required' });
   }
 
   try {
+    const access = await ensureCanManageProgram(req.userId || '', programId);
+    if (!access.ok) {
+      return res.status(access.status).json({ error: access.error });
+    }
+
     const supabase = getSupabaseAdmin();
+    const { data: existingRound, error: existingRoundError } = await supabase
+      .from('rounds')
+      .select('id')
+      .eq('id', id)
+      .eq('program_id', programId)
+      .maybeSingle();
+
+    if (existingRoundError) {
+      return res.status(500).json({ error: existingRoundError.message || 'Failed to load round' });
+    }
+    if (!existingRound) {
+      return res.status(404).json({ error: 'Round not found' });
+    }
 
     const { error: edgeDeleteError } = await supabase
       .from('round_edges')
@@ -258,15 +425,28 @@ router.delete('/:programId/rounds/:id', requireAuth, async (req, res) => {
   }
 });
 
-router.put('/:programId/edges', requireAuth, async (req, res) => {
+router.put('/:programId/edges', requireAuth, async (req: AuthenticatedRequest, res) => {
   const { programId } = req.params;
-  const edges = Array.isArray(req.body?.edges) ? req.body.edges : [];
-
   if (!programId) {
     return res.status(400).json({ error: 'programId is required' });
   }
 
   try {
+    const access = await ensureCanManageProgram(req.userId || '', programId);
+    if (!access.ok) {
+      return res.status(access.status).json({ error: access.error });
+    }
+
+    if (!Array.isArray(req.body?.edges)) {
+      return res.status(400).json(validationError({ edges: 'edges must be an array' }));
+    }
+
+    const edges = req.body.edges;
+    const payloadValidation = validateEdgesPayload(edges);
+    if (!payloadValidation.ok) {
+      return res.status(400).json(validationError(payloadValidation.fields));
+    }
+
     const supabase = getSupabaseAdmin();
 
     const { data: roundRows, error: roundsError } = await supabase
@@ -283,13 +463,17 @@ router.put('/:programId/edges', requireAuth, async (req, res) => {
     for (const edge of edges) {
       const conditionValidation = validateEdgeCondition(edge?.condition);
       if (!conditionValidation.ok) {
-        return res.status(400).json({ error: conditionValidation.error });
+        return res.status(400).json(validationError({
+          'edges.condition': conditionValidation.error || 'Invalid edge condition',
+        }));
       }
     }
 
     const dagValidation = validateEdgesAsDag(roundIds, edges);
     if (!dagValidation.ok) {
-      return res.status(400).json({ error: dagValidation.error });
+      return res.status(400).json(validationError({
+        edges: dagValidation.error || 'Invalid edge graph',
+      }));
     }
 
     const { error: deleteError } = await supabase.from('round_edges').delete().eq('program_id', programId);
@@ -337,10 +521,19 @@ router.get('/:programId/active-form', requireAuth, async (req, res) => {
   }
 });
 
-router.put('/:programId/active-form', requireAuth, async (req, res) => {
+router.put('/:programId/active-form', requireAuth, async (req: AuthenticatedRequest, res) => {
   const { programId } = req.params;
   const { form_id } = req.body || {};
   try {
+    const access = await ensureCanManageProgram(req.userId || '', programId);
+    if (!access.ok) {
+      return res.status(access.status).json({ error: access.error });
+    }
+
+    if (form_id !== undefined && form_id !== null && typeof form_id !== 'string') {
+      return res.status(400).json(validationError({ form_id: 'form_id must be a string UUID or null' }));
+    }
+
     const supabase = getSupabaseAdmin();
     const { error } = await supabase
       .from('programs')
