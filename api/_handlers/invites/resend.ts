@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
-import { Resend } from 'resend';
 import { getAuthenticatedUser } from '../../_utils/authUser';
+import { getOrgResendMailer, RESEND_NOT_CONFIGURED_MESSAGE } from '../../_utils/orgResend.js';
 import { canManageInvites } from '../../_utils/invitePermissions';
 import { enforceRateLimit, getClientIp } from '../../_utils/rateLimit';
 import { createSupabaseAdmin } from '../../_utils/supabaseAdmin';
@@ -37,12 +37,6 @@ export default async function handler(req: any, res: any) {
 
   const { inviteType, recordId, programTitleFallback } = parsed.data;
   const supabase = createSupabaseAdmin();
-  const resendApiKey = process.env.RESEND_API_KEY || '';
-
-  if (!resendApiKey) {
-    res.status(500).json({ error: 'RESEND_API_KEY not configured' });
-    return;
-  }
 
   const { data: inviterProfile } = await supabase
     .from('profiles')
@@ -73,8 +67,6 @@ export default async function handler(req: any, res: any) {
     res.status(403).json({ error: 'Insufficient permissions to resend invites' });
     return;
   }
-
-  const resend = new Resend(resendApiKey);
 
   try {
     if (inviteType === 'team') {
@@ -136,8 +128,20 @@ export default async function handler(req: any, res: any) {
         },
       });
 
-      const { data, error: sendError } = await resend.emails.send({
-        from: process.env.RESEND_FROM || 'AwardX <no-reply@awardx.one>',
+      const mailer = await getOrgResendMailer(inviteRow.organization_id);
+      if (!mailer) {
+        if (emailLogId) {
+          await updateEmailLog(supabase, emailLogId, {
+            status: 'failed',
+            errorMessage: RESEND_NOT_CONFIGURED_MESSAGE,
+          });
+        }
+        res.status(503).json({ error: RESEND_NOT_CONFIGURED_MESSAGE });
+        return;
+      }
+
+      const { data, error: sendError } = await mailer.resend.emails.send({
+        from: mailer.from,
         to: inviteRow.email,
         subject,
         text: `The AwardX team for ${programTitle} wants you to join this event.\nAssigned role: ${roleName}\nAccept your invite: ${inviteUrl}`,
@@ -223,8 +227,20 @@ export default async function handler(req: any, res: any) {
       },
     });
 
-    const { data, error: sendError } = await resend.emails.send({
-      from: process.env.RESEND_FROM || 'AwardX <no-reply@awardx.one>',
+    const judgeMailer = await getOrgResendMailer(judgeRow.organization_id);
+    if (!judgeMailer) {
+      if (emailLogId) {
+        await updateEmailLog(supabase, emailLogId, {
+          status: 'failed',
+          errorMessage: RESEND_NOT_CONFIGURED_MESSAGE,
+        });
+      }
+      res.status(503).json({ error: RESEND_NOT_CONFIGURED_MESSAGE });
+      return;
+    }
+
+    const { data, error: sendError } = await judgeMailer.resend.emails.send({
+      from: judgeMailer.from,
       to: judgeRow.email,
       subject,
       text: `Hi ${judgeName},\n\nYou have been invited to judge "${programTitle}".\n\nClick the link below to access your judging portal and view the assigned submissions:\n${inviteUrl}\n\nYou can bookmark this link to return to your portal at any time during the judging period.\n\nBest,\nThe AwardX team`,

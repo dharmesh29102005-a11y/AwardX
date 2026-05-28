@@ -1,7 +1,8 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { Button } from '../Button';
-import { User, CreditCard, Bell, Shield, Globe, Wallet, Keyboard } from 'lucide-react';
+import { User, CreditCard, Bell, Shield, Globe, Wallet, Keyboard, Plug } from 'lucide-react';
+import { IntegrationsPanel } from './IntegrationsPanel';
 import { db } from '../../services/database';
 import { auth, storage } from '../../services/supabase';
 import { Program } from '../../services/models';
@@ -23,6 +24,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
   const [billingFee, setBillingFee] = useState(0);
   const [billingPublicKey, setBillingPublicKey] = useState('');
   const [connectMessage, setConnectMessage] = useState<string | null>(null);
+  const [integrationMessage, setIntegrationMessage] = useState<string | null>(null);
   const [stripeConnected, setStripeConnected] = useState(false);
   const [stripeStatusDetails, setStripeStatusDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -56,6 +58,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
     const tab = params.get('tab');
     if (tab === 'billing') {
       setActiveTab('billing');
+    }
+    if (tab === 'integrations') {
+      setActiveTab('integrations');
     }
 
     const load = async () => {
@@ -287,8 +292,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
     window.location.href = `/api/payments/stripe-connect-start?programId=${selectedProgramId}`;
   };
 
+  const refreshPrograms = async () => {
+    const refreshed = await db.getPrograms();
+    setPrograms(refreshed || []);
+  };
+
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
+    { id: 'integrations', label: 'Integrations', icon: Plug },
     { id: 'billing', label: 'Billing & Plan', icon: CreditCard },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'security', label: 'Security', icon: Shield },
@@ -340,6 +351,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
        {error && (
          <div className="bg-rose-50 border border-rose-200 text-rose-800 rounded-xl px-4 py-3 text-sm">
            {error}
+         </div>
+       )}
+
+       {integrationMessage && (
+         <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl px-4 py-3 text-sm">
+           {integrationMessage}
          </div>
        )}
 
@@ -491,6 +508,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
                       </Button>
                    </div>
                 </div>
+             )}
+
+             {activeTab === 'integrations' && (
+               <IntegrationsPanel
+                 programs={programs}
+                 selectedProgramId={selectedProgramId}
+                 onProgramChange={setSelectedProgramId}
+                 loading={loading}
+                 onError={setError}
+                 onSuccess={setIntegrationMessage}
+                 onProgramsUpdated={refreshPrograms}
+               />
              )}
 
              {activeTab === 'billing' && (

@@ -1,4 +1,4 @@
-import { Resend } from 'resend';
+import { getOrgResendMailer, RESEND_NOT_CONFIGURED_MESSAGE } from '../../_utils/orgResend.js';
 import { enforceRateLimit, getClientIp } from '../../_utils/rateLimit';
 import { judgeInviteSchema } from '../../_utils/validation';
 import { createSupabaseAdmin } from '../../_utils/supabaseAdmin';
@@ -43,18 +43,6 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
-  const resendApiKey = process.env.RESEND_API_KEY || '';
-  if (!resendApiKey) {
-    res.status(200).json({
-      ok: true,
-      emailSent: false,
-      warning: 'Invite request accepted but email service is not configured',
-    });
-    return;
-  }
-
-  const resend = new Resend(resendApiKey);
-  const fromAddress = process.env.RESEND_FROM || 'AwardX <onboarding@resend.dev>';
   const subject = `You're invited to judge: ${programTitle}`;
   const previewText = `You have been invited to judge ${programTitle}. Click to access your judging portal.`;
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.VITE_SITE_URL || 'https://awardstuff.vercel.app';
@@ -87,6 +75,16 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
+  const mailer = await getOrgResendMailer(resolvedOrganizationId);
+  if (!mailer) {
+    res.status(200).json({
+      ok: true,
+      emailSent: false,
+      warning: RESEND_NOT_CONFIGURED_MESSAGE,
+    });
+    return;
+  }
+
   const { id: emailLogId } = await createEmailLog(supabase, {
     organizationId: resolvedOrganizationId,
     programId: programId || null,
@@ -102,8 +100,8 @@ export default async function handler(req: any, res: any) {
   });
 
   try {
-    const { data, error: sendError } = await resend.emails.send({
-      from: fromAddress,
+    const { data, error: sendError } = await mailer.resend.emails.send({
+      from: mailer.from,
       to: normalizedEmail,
       subject,
       text: `Hi ${judgeName},\n\nYou have been invited to judge "${programTitle}".\n\nClick the link below to access your judging portal and view the assigned submissions:\n${actionUrl}\n\nYou can bookmark this link to return to your portal at any time during the judging period.\n\nBest,\nThe AwardX team`,

@@ -7,15 +7,6 @@
   "functions": {
     "api/[...path].ts": {
       "maxDuration": 30
-    },
-    "api/cron/round-scheduler.ts": {
-      "maxDuration": 60
     }
-  },
-  "crons": [
-    {
-      "path": "/api/cron/round-scheduler",
-      "schedule": "* * * * *"
-    }
-  ]
+  }
 }

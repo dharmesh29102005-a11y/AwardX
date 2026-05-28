@@ -1,8 +1,4 @@
-import { loadRootEnv } from '../server/src/loadEnv.js';
 import { resolveHandler } from './_handlers/registry';
-import { handleWithExpress } from './_bridge/expressBridge';
-
-loadRootEnv();
 
 export default async function handler(req: any, res: any) {
   const raw = req.query.path;
@@ -10,10 +6,10 @@ export default async function handler(req: any, res: any) {
   const method = (req.method || 'GET').toUpperCase();
 
   const routeHandler = resolveHandler(pathKey, method);
-  if (routeHandler) {
-    await routeHandler(req, res);
+  if (!routeHandler) {
+    res.status(404).json({ error: 'Not found', path: pathKey, method });
     return;
   }
 
-  await handleWithExpress(req, res, pathKey);
+  await routeHandler(req, res);
 }

@@ -9,6 +9,7 @@ export interface PaymentConfig {
   fee: number;
   publicKey?: string;
   secretKey?: string;
+  hasSecretKey?: boolean;
   connected: boolean;
 }
 

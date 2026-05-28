@@ -623,6 +623,7 @@ class DatabaseService {
         fee: Number(program.program_payment_configs.fee_amount) || 0,
         connected: program.program_payment_configs.connected || false,
         publicKey: program.program_payment_configs.public_key || undefined,
+        hasSecretKey: !!program.program_payment_configs.secret_key_encrypted,
       } : undefined,
       description: program.description,
       slug: program.slug,
@@ -815,6 +816,7 @@ class DatabaseService {
           currency: pc.currency || 'USD',
           fee_amount: Number(pc.fee) || 0,
           public_key: pc.publicKey || null,
+          secret_key_encrypted: pc.secretKey || null,
           connected: !!pc.connected,
         }, { onConflict: 'program_id' });
       if (pcError) {

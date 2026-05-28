@@ -1,5 +1,5 @@
-import { Resend } from 'resend';
 import { enforceRateLimit, getClientIp } from '../../_utils/rateLimit';
+import { getOrgResendMailer, RESEND_NOT_CONFIGURED_MESSAGE } from '../../_utils/orgResend.js';
 import { teamInviteSchema } from '../../_utils/validation';
 import { createSupabaseAdmin } from '../../_utils/supabaseAdmin';
 import { getAuthenticatedUser } from '../../_utils/authUser';
@@ -140,8 +140,6 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
-    const resendApiKey = process.env.RESEND_API_KEY || '';
-    const fromAddress = process.env.RESEND_FROM || 'AwardX <onboarding@resend.dev>';
     const subject = `AwardX invite: ${programTitle}`;
     const roleLine = roleName ? `Assigned role: ${roleName}` : 'Assigned role: Team member';
     const siteUrl = (process.env.SITE_URL || process.env.VITE_SITE_URL || 'https://awardstuff.vercel.app').replace(/\/$/, '');
@@ -163,28 +161,27 @@ export default async function handler(req: any, res: any) {
       },
     });
 
-    if (!resendApiKey) {
+    const mailer = await getOrgResendMailer(resolvedOrganizationId);
+    if (!mailer) {
       if (emailLogId) {
         await updateEmailLog(supabase, emailLogId, {
           status: 'failed',
-          errorMessage: 'RESEND_API_KEY not configured',
+          errorMessage: RESEND_NOT_CONFIGURED_MESSAGE,
         });
       }
-      // Keep invite pending even if mail transport is unavailable.
       res.status(200).json({
         ok: true,
         inviteId: inviteRow.id,
         token: inviteRow.token,
         status: 'pending',
         emailSent: false,
-        warning: 'Invite created but email service is not configured',
+        warning: RESEND_NOT_CONFIGURED_MESSAGE,
       });
       return;
     }
 
-    const resend = new Resend(resendApiKey);
-    const { data, error: sendError } = await resend.emails.send({
-      from: fromAddress,
+    const { data, error: sendError } = await mailer.resend.emails.send({
+      from: mailer.from,
       to: normalizedEmail,
       subject,
       text: `The AwardX team for ${programTitle} wants you to join this event.\n${roleLine}\n${inviteLine}`,

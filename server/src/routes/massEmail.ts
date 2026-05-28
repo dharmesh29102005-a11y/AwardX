@@ -16,9 +16,13 @@
  */
 
 import { Router } from 'express';
-import { Resend } from 'resend';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 import { getSupabaseAdmin } from '../supabase.js';
+import {
+  formatOrgFromAddress,
+  getOrgResendMailer,
+  RESEND_NOT_CONFIGURED_MESSAGE,
+} from '../services/orgResend.js';
 
 const router = Router();
 
@@ -172,17 +176,7 @@ router.post('/:programId/rounds/:roundId/send', requireAuth, async (req: Authent
     const permitted = await canSendMassEmail(req.userId || '', programId);
     if (!permitted) return res.status(403).json({ error: 'Insufficient permissions' });
 
-    const resendApiKey = process.env.RESEND_API_KEY || '';
-    if (!resendApiKey) {
-      return res.status(503).json({ error: 'Email service (Resend) is not configured on this server' });
-    }
-
     const supabase = getSupabaseAdmin();
-    const resend = new Resend(resendApiKey);
-
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
-    const defaultFrom = process.env.RESEND_FROM || `AwardX <${fromEmail}>`;
-    const fromAddress = fromName ? `${fromName} <${fromEmail}>` : defaultFrom;
 
     const [programResult, roundResult, submissionsResult] = await Promise.all([
       supabase
@@ -213,6 +207,15 @@ router.post('/:programId/rounds/:roundId/send', requireAuth, async (req: Authent
 
     const program = programResult.data;
     const round = roundResult.data;
+
+    const mailer = await getOrgResendMailer(supabase, program.organization_id);
+    if (!mailer) {
+      return res.status(503).json({ error: RESEND_NOT_CONFIGURED_MESSAGE });
+    }
+
+    const resend = mailer.resend;
+    const fromAddress = formatOrgFromAddress(mailer.config, fromName);
+
     const all = submissionsResult.data || [];
 
     // Filter by segment

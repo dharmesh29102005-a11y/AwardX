@@ -63,7 +63,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           const urlTab = searchParams.get('tab');
           const urlProgram = searchParams.get('program');
 
-          if (!cancelled && (urlView === 'settings' || urlTab === 'billing')) {
+          if (!cancelled && (urlView === 'settings' || urlTab === 'billing' || urlTab === 'integrations')) {
             setCurrentView('settings');
           } else if (!cancelled && urlView) {
             setCurrentView(urlView);
@@ -122,6 +122,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const params = new URLSearchParams();
     if (activeEvent?.id) params.set('program', activeEvent.id);
     if (currentView && currentView !== 'overview') params.set('view', currentView);
+    if (currentView === 'settings') {
+      const existingTab = new URLSearchParams(window.location.search).get('tab');
+      if (existingTab) params.set('tab', existingTab);
+    }
     const newSearch = params.toString();
     const currentSearch = window.location.search.replace(/^\?/, '');
     if (newSearch !== currentSearch) {

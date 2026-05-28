@@ -1,7 +1,10 @@
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
-import { Resend } from 'resend';
 import { getSupabaseAdmin, isSupabaseConfigured } from '../supabase.js';
+import {
+	RESEND_NOT_CONFIGURED_MESSAGE,
+	getOrgResendMailer,
+} from '../services/orgResend.js';
 
 const router = Router();
 
@@ -64,17 +67,8 @@ function escapeHtml(str: string): string {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function getResend() {
-	const key = process.env.RESEND_API_KEY || '';
-	return key ? new Resend(key) : null;
-}
-
 function getSiteUrl() {
 	return (process.env.SITE_URL || process.env.VITE_SITE_URL || 'http://localhost:3000').replace(/\/$/, '');
-}
-
-function getFromAddress() {
-	return process.env.RESEND_FROM || 'AwardX <onboarding@resend.dev>';
 }
 
 async function getAuthUser(req: any) {
@@ -539,8 +533,8 @@ router.post('/team', async (req, res) => {
 			context: { roleName: roleName || null, programTitle, inviteUrl },
 		});
 
-		const resend = getResend();
-		if (!resend) {
+		const mailer = await getOrgResendMailer(supabase, resolvedOrgId);
+		if (!mailer) {
 			if (existingProfile?.id) {
 				await insertNotificationSafe(supabase, {
 					organizationId: resolvedOrgId,
@@ -552,18 +546,18 @@ router.post('/team', async (req, res) => {
 					metadata: { inviteId: inviteRow.id, inviteUrl },
 				});
 			}
-			if (emailLogId) await updateEmailLog(supabase, emailLogId, 'failed', { errorMessage: 'RESEND_API_KEY not configured' });
+			if (emailLogId) await updateEmailLog(supabase, emailLogId, 'failed', { errorMessage: RESEND_NOT_CONFIGURED_MESSAGE });
 			return res.status(200).json({
 				ok: true,
 				inviteId: inviteRow.id,
 				token: inviteRow.token,
 				emailSent: false,
-				warning: 'Invite created but email service is not configured',
+				warning: RESEND_NOT_CONFIGURED_MESSAGE,
 			});
 		}
 
-		const { data: mailData, error: sendError } = await resend.emails.send({
-			from: getFromAddress(),
+		const { data: mailData, error: sendError } = await mailer.resend.emails.send({
+			from: mailer.from,
 			to: normalizedEmail,
 			subject: `AwardX invite: ${programTitle}`,
 			text: `The AwardX team for ${programTitle} wants you to join this event.\n${roleLine}\nAccept your invite: ${inviteUrl}`,
@@ -651,9 +645,9 @@ router.post('/judge', async (req, res) => {
 			return res.status(403).json({ error: 'Insufficient permissions to send judge invites' });
 		}
 
-		const resend = getResend();
-		if (!resend) {
-			return res.status(200).json({ ok: true, emailSent: false, warning: 'Email service not configured' });
+		const mailer = await getOrgResendMailer(supabase, resolvedOrgId);
+		if (!mailer) {
+			return res.status(200).json({ ok: true, emailSent: false, warning: RESEND_NOT_CONFIGURED_MESSAGE });
 		}
 
 		const siteUrl = getSiteUrl();
@@ -661,8 +655,8 @@ router.post('/judge', async (req, res) => {
 		const judgeName = name || 'Judge';
 		const subject = `You're invited to judge: ${programTitle}`;
 
-		const { data: mailData, error: sendError } = await resend.emails.send({
-			from: getFromAddress(),
+		const { data: mailData, error: sendError } = await mailer.resend.emails.send({
+			from: mailer.from,
 			to: email,
 			subject,
 			text: `Hi ${judgeName},\n\nYou have been invited to judge "${programTitle}".\n\nAccess your portal: ${actionUrl}\n\nBest,\nThe AwardX team`,
@@ -729,9 +723,6 @@ router.post('/resend', async (req, res) => {
 		const permitted = await canManage(supabase, authResult.user.id, resolvedOrgId);
 		if (!permitted) return res.status(403).json({ error: 'Insufficient permissions' });
 
-		const resend = getResend();
-		if (!resend) return res.status(500).json({ error: 'RESEND_API_KEY not configured' });
-
 		const siteUrl = getSiteUrl();
 
 		if (inviteType === 'team') {
@@ -770,8 +761,14 @@ router.post('/resend', async (req, res) => {
 				context: { roleName, programTitle, inviteUrl },
 			});
 
-			const { data: mailData, error: sendErr } = await resend.emails.send({
-				from: getFromAddress(),
+			const mailer = await getOrgResendMailer(supabase, invite.organization_id);
+			if (!mailer) {
+				if (emailLogId) await updateEmailLog(supabase, emailLogId, 'failed', { errorMessage: RESEND_NOT_CONFIGURED_MESSAGE });
+				return res.status(503).json({ error: RESEND_NOT_CONFIGURED_MESSAGE });
+			}
+
+			const { data: mailData, error: sendErr } = await mailer.resend.emails.send({
+				from: mailer.from,
 				to: invite.email,
 				subject: `AwardX invite: ${programTitle}`,
 				text: `The AwardX team for ${programTitle} wants you to join.\nAssigned role: ${roleName}\nAccept: ${inviteUrl}`,
@@ -827,8 +824,14 @@ router.post('/resend', async (req, res) => {
 			context: { judgeName, programTitle: judgeProgramTitle, inviteUrl: judgeInviteUrl },
 		});
 
-		const { data: judgeMailData, error: judgeSendErr } = await resend.emails.send({
-			from: getFromAddress(),
+		const judgeMailer = await getOrgResendMailer(supabase, judgeRow.organization_id);
+		if (!judgeMailer) {
+			if (judgeEmailLogId) await updateEmailLog(supabase, judgeEmailLogId, 'failed', { errorMessage: RESEND_NOT_CONFIGURED_MESSAGE });
+			return res.status(503).json({ error: RESEND_NOT_CONFIGURED_MESSAGE });
+		}
+
+		const { data: judgeMailData, error: judgeSendErr } = await judgeMailer.resend.emails.send({
+			from: judgeMailer.from,
 			to: judgeRow.email,
 			subject: `You're invited to judge: ${judgeProgramTitle}`,
 			text: `Hi ${judgeName},\n\nYou have been invited to judge "${judgeProgramTitle}".\n\nClick the link below to access your judging portal:\n${judgeInviteUrl}\n\nBest,\nThe AwardX team`,
