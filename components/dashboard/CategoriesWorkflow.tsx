@@ -1,6 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Category } from '../../services/models';
-import { ZoomIn, ZoomOut, X } from 'lucide-react';
+import { layoutCategoryTree } from '../../lib/categoryHierarchy';
+import { ZoomIn, ZoomOut, X, Maximize2, Plus } from 'lucide-react';
 
 interface WorkflowProps {
     categories: Category[];
@@ -36,96 +37,37 @@ export const CategoriesWorkflow: React.FC<WorkflowProps> = ({ categories, onAddS
     const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
     const [dragStart, setDragStart] = useState({ mouseX: 0, mouseY: 0, nodeX: 0, nodeY: 0 });
 
-    const [hasInitialized, setHasInitialized] = useState(false);
+    const scaleRef = useRef(scale);
+    const offsetRef = useRef(offset);
 
-    // Initial Layout Calculation
     useEffect(() => {
-        if (!categories.length || hasInitialized) return;
+        scaleRef.current = scale;
+    }, [scale]);
 
-        const newNodes: Node[] = [];
-        const newEdges: Edge[] = [];
-        const levelHeight = 150;
-        const levelWidth = 350;
-
-        // Group by parent
-        const hierarchy: Record<string, Category[]> = {};
-        categories.forEach(c => {
-            const pid = c.parentId || 'root';
-            if (!hierarchy[pid]) hierarchy[pid] = [];
-            hierarchy[pid].push(c);
-        });
-
-        // Recursive layout
-        const processNode = (cat: Category, x: number, y: number) => {
-            newNodes.push({
-                id: cat.id,
-                x: x,
-                y: y,
-                data: cat
-            });
-
-            const children = hierarchy[cat.id] || [];
-            if (children.length > 0) {
-                const childrenTotalHeight = children.length * levelHeight;
-                let currentChildY = y - (childrenTotalHeight / 2) + (levelHeight / 2);
-
-                children.forEach(child => {
-                    newEdges.push({
-                        id: `${cat.id}-${child.id}`,
-                        source: cat.id,
-                        target: child.id
-                    });
-
-                    processNode(child, x + levelWidth, currentChildY);
-                    currentChildY += levelHeight;
-                });
-            }
-        };
-
-        // Start with roots
-        const roots = hierarchy['root'] || [];
-        let rootY = 0;
-        roots.forEach((root) => {
-            processNode(root, 100, rootY);
-            rootY += 350; // Spacing between trees
-        });
-
-        setNodes(newNodes);
-        setEdges(newEdges);
-        setHasInitialized(true);
-    }, [categories, hasInitialized]);
-
-    // Handle new categories (simple append logic)
     useEffect(() => {
-        if (!hasInitialized || !categories.length) return;
-        const existingIds = new Set(nodes.map(n => n.id));
-        const newCats = categories.filter(c => !existingIds.has(c.id));
+        offsetRef.current = offset;
+    }, [offset]);
 
-        if (newCats.length === 0) return;
+    const categorySignature = useMemo(
+        () =>
+            categories
+                .map((c) => `${c.id}:${c.parentId ?? ''}:${c.title}`)
+                .sort()
+                .join('|'),
+        [categories],
+    );
 
-        const newNodesToAdd: Node[] = [];
-        const newEdgesToAdd: Edge[] = [];
+    useEffect(() => {
+        if (!categories.length) {
+            setNodes([]);
+            setEdges([]);
+            return;
+        }
 
-        newCats.forEach(cat => {
-            const parentNode = nodes.find(n => n.id === cat.parentId);
-            const x = parentNode ? parentNode.x + 350 : 100;
-            const y = parentNode ? parentNode.y + 120 : 0;
-
-            newNodesToAdd.push({ id: cat.id, x, y, data: cat });
-
-            if (cat.parentId) {
-                newEdgesToAdd.push({
-                    id: `${cat.parentId}-${cat.id}`,
-                    source: cat.parentId,
-                    target: cat.id
-                });
-            }
-        });
-
-        setNodes(prev => [...prev, ...newNodesToAdd]);
-        setEdges(prev => [...prev, ...newEdgesToAdd]);
-    }, [categories, hasInitialized, nodes]);
-
+        const { nodes: layoutNodes, edges: layoutEdges } = layoutCategoryTree(categories);
+        setNodes(layoutNodes);
+        setEdges(layoutEdges);
+    }, [programId, categorySignature, categories]);
 
     // Handlers
     const handleNodeMouseDown = (e: React.MouseEvent, node: Node) => {
@@ -170,11 +112,59 @@ export const CategoriesWorkflow: React.FC<WorkflowProps> = ({ categories, onAddS
         setDraggingNodeId(null);
     };
 
-    const handleWheel = (e: React.WheelEvent) => {
-        const delta = -e.deltaY * 0.001;
-        const newScale = Math.min(Math.max(0.1, scale + delta), 3);
+    const applyZoom = (deltaScale: number, focalX: number, focalY: number) => {
+        const currentScale = scaleRef.current;
+        const currentOffset = offsetRef.current;
+        const newScale = Math.min(Math.max(0.1, currentScale + deltaScale), 3);
+        if (newScale === currentScale) return;
+
+        const ratio = newScale / currentScale;
+        const nextOffset = {
+            x: focalX - (focalX - currentOffset.x) * ratio,
+            y: focalY - (focalY - currentOffset.y) * ratio,
+        };
+
+        scaleRef.current = newScale;
+        offsetRef.current = nextOffset;
         setScale(newScale);
+        setOffset(nextOffset);
     };
+
+    const zoomByStep = (direction: 1 | -1) => {
+        const el = containerRef.current;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        applyZoom(direction * 0.15, rect.width / 2, rect.height / 2);
+    };
+
+    // Native wheel listener — React onWheel is passive and cannot preventDefault,
+    // so the dashboard main scroll was stealing scroll-to-zoom.
+    useEffect(() => {
+        const el = containerRef.current;
+        if (!el) return;
+
+        const onWheel = (e: WheelEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const rect = el.getBoundingClientRect();
+            const focalX = e.clientX - rect.left;
+            const focalY = e.clientY - rect.top;
+
+            let deltaY = e.deltaY;
+            if (e.deltaMode === WheelEvent.DOM_DELTA_LINE) {
+                deltaY *= 16;
+            } else if (e.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+                deltaY *= rect.height;
+            }
+
+            const zoomIntensity = e.ctrlKey || e.metaKey ? 0.0025 : 0.0015;
+            applyZoom(-deltaY * zoomIntensity, focalX, focalY);
+        };
+
+        el.addEventListener('wheel', onWheel, { passive: false, capture: true });
+        return () => el.removeEventListener('wheel', onWheel, { capture: true });
+    }, []);
 
     // Handle Escape to exit fullscreen
     useEffect(() => {
@@ -239,13 +229,12 @@ export const CategoriesWorkflow: React.FC<WorkflowProps> = ({ categories, onAddS
             className={`
                 bg-slate-50 relative overflow-hidden transition-all duration-300 group select-none shadow-inner
                 ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}
-                ${isFullscreen ? 'fixed inset-0 z-[9999] rounded-none' : 'w-full h-full'}
+                ${isFullscreen ? 'fixed inset-0 z-[9999] rounded-none' : 'w-full h-full min-h-[480px] rounded-xl border border-slate-200'}
              `}
             onMouseDown={handleCanvasMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
-            onWheel={handleWheel}
         >
             <style>{`
             @keyframes flow {
@@ -345,18 +334,50 @@ export const CategoriesWorkflow: React.FC<WorkflowProps> = ({ categories, onAddS
                 ))}
             </div>
 
+            {categories.length === 0 && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none z-20">
+                    <p className="text-sm font-semibold text-slate-600">No categories yet</p>
+                    <p className="text-xs text-slate-400 max-w-xs text-center">
+                        Add a root category, then use the 2D canvas to branch subcategories and awards.
+                    </p>
+                </div>
+            )}
+
             {/* UI Controls */}
             <div className="absolute bottom-6 right-6 flex flex-col gap-2 select-none z-50">
                 <div className="bg-white p-1 rounded-lg border border-slate-200 shadow-lg flex flex-col gap-1">
-                    <button onClick={() => setScale(s => Math.min(s + 0.1, 3))} className="p-2 hover:bg-slate-50 text-slate-600 rounded active:bg-slate-100 transition-colors"><ZoomIn className="w-4 h-4" /></button>
+                    {!isFullscreen && (
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => setIsFullscreen(true)}
+                                className="p-2 hover:bg-slate-50 text-slate-600 rounded active:bg-slate-100 transition-colors"
+                                title="Fullscreen"
+                            >
+                                <Maximize2 className="w-4 h-4" />
+                            </button>
+                            <div className="h-px bg-slate-100 mx-2" />
+                        </>
+                    )}
+                    <button type="button" onClick={() => zoomByStep(1)} className="p-2 hover:bg-slate-50 text-slate-600 rounded active:bg-slate-100 transition-colors" title="Zoom in"><ZoomIn className="w-4 h-4" /></button>
                     <div className="h-px bg-slate-100 mx-2" />
-                    <button onClick={() => setScale(s => Math.max(s - 0.1, 0.1))} className="p-2 hover:bg-slate-50 text-slate-600 rounded active:bg-slate-100 transition-colors"><ZoomOut className="w-4 h-4" /></button>
+                    <button type="button" onClick={() => zoomByStep(-1)} className="p-2 hover:bg-slate-50 text-slate-600 rounded active:bg-slate-100 transition-colors" title="Zoom out"><ZoomOut className="w-4 h-4" /></button>
                 </div>
                 <div className="bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-lg text-xs font-mono text-slate-500 text-center">
                     {Math.round(scale * 100)}%
                 </div>
             </div>
 
+            {!isFullscreen && categories.length > 0 && (
+                <button
+                    type="button"
+                    onClick={() => onAddSub('')}
+                    className="absolute top-4 left-4 z-50 inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-700 shadow-sm hover:bg-indigo-50 transition-colors"
+                >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add root category
+                </button>
+            )}
 
             {isFullscreen && (
                 <button

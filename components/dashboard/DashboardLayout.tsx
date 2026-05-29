@@ -28,6 +28,14 @@ import { Button } from '../Button';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { UniversalSearchPalette, type UniversalSearchResult } from './UniversalSearchPalette';
 import NavigationMenuFour, { type HeaderNavItem, type HeaderNavigationLink } from '@/components/ui/navigation-menu-4';
+import { AwardsNavItem } from './AwardsNavItem';
+import { HoldToggleNavItem } from './HoldToggleNavItem';
+import type { AwardsViewMode } from '../../lib/awardsViewMode';
+import {
+  holdHintForScheduleMode,
+  toggleScheduleRepresentation,
+  type ScheduleRepresentation,
+} from '../../lib/roundRepresentationConversion';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -39,6 +47,10 @@ interface DashboardLayoutProps {
   onSwitchEvent: () => void;
   noPadding?: boolean;
   hideHeader?: boolean;
+  awardsViewMode?: AwardsViewMode;
+  onAwardsViewModeChange?: (mode: AwardsViewMode) => void;
+  scheduleRepresentation?: ScheduleRepresentation;
+  onScheduleRepresentationChange?: (mode: ScheduleRepresentation) => void;
 }
 
 interface SidebarItemProps {
@@ -154,7 +166,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   onLogout,
   onSwitchEvent,
   noPadding = false,
-  hideHeader = false
+  hideHeader = false,
+  awardsViewMode = 'workflow',
+  onAwardsViewModeChange,
+  scheduleRepresentation = 'tiles',
+  onScheduleRepresentationChange,
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
@@ -650,13 +666,17 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     e.preventDefault();
     if (!activeEvent || !newCategoryName) return;
 
-    await databaseService.addCategory({
-      title: newCategoryName,
-      programId: activeEvent.id,
-      parentId: parentForModal
-    });
-    setNewCategoryName('');
-    setIsCategoryModalOpen(false);
+    try {
+      await databaseService.addCategory({
+        title: newCategoryName,
+        programId: activeEvent.id,
+        parentId: parentForModal,
+      });
+      setNewCategoryName('');
+      setIsCategoryModalOpen(false);
+    } catch (error) {
+      console.error('Failed to create category:', error);
+    }
   };
 
   const openCategoryModal = (parentId: string | null = null) => {
@@ -761,18 +781,56 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         <div className="flex-1 overflow-y-auto py-6 px-3 scrollbar-hide">
           {!isLeftCollapsed && <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 px-3 font-display">Event Operations</div>}
 
-          {visibleLeftNav.map((item) => (
-            <SidebarItem
-              key={item.id}
-              id={item.id}
-              label={item.label}
-              icon={item.icon}
-              currentView={currentView}
-              collapsed={isLeftCollapsed}
-              onClick={() => onChangeView(item.id)}
-            >
-            </SidebarItem>
-          ))}
+          {visibleLeftNav.map((item) => {
+            if (item.id === 'awards' && onAwardsViewModeChange) {
+              return (
+                <AwardsNavItem
+                  key={item.id}
+                  label={item.label}
+                  icon={item.icon}
+                  currentView={currentView}
+                  collapsed={isLeftCollapsed}
+                  awardsViewMode={awardsViewMode}
+                  onNavigate={() => onChangeView('awards')}
+                  onToggleCanvas={() =>
+                    onAwardsViewModeChange(awardsViewMode === 'tiles' ? 'workflow' : 'tiles')
+                  }
+                />
+              );
+            }
+
+            if (item.id === 'schedule-rounds' && onScheduleRepresentationChange) {
+              return (
+                <HoldToggleNavItem
+                  key={item.id}
+                  navId="schedule-rounds"
+                  label={item.label}
+                  icon={item.icon}
+                  currentView={currentView}
+                  collapsed={isLeftCollapsed}
+                  holdHint={holdHintForScheduleMode(scheduleRepresentation)}
+                  onNavigate={() => onChangeView('schedule-rounds')}
+                  onHoldToggle={() =>
+                    onScheduleRepresentationChange(
+                      toggleScheduleRepresentation(scheduleRepresentation),
+                    )
+                  }
+                />
+              );
+            }
+
+            return (
+              <SidebarItem
+                key={item.id}
+                id={item.id}
+                label={item.label}
+                icon={item.icon}
+                currentView={currentView}
+                collapsed={isLeftCollapsed}
+                onClick={() => onChangeView(item.id)}
+              />
+            );
+          })}
 
           {visibleRightNav.length > 0 && (
             <>

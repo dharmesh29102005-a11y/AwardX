@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { FormBuilder, FormField, FormPage, FormTheme, FormBuilderRef } from './FormBuilder';
 import { db } from '../../services/database';
 import { Program } from '../../services/models';
-import { Save, FileText, Plus, Trash2, CheckCircle2, XCircle, X, Link2, Copy, Check } from 'lucide-react';
+import { queryKeys } from '../../services/queryKeys';
+import { Save, FileText, Plus, Trash2, CheckCircle2, XCircle, X, Link2, Copy, Check, PanelLeftClose, Layout, Settings, Star } from 'lucide-react';
+import { FloatingPanelToggle } from './formBuilder/FloatingPanelToggle';
 import { Button } from '../Button';
 import { Modal } from '../Modal';
 import { useConfirm } from '../ConfirmDialog';
@@ -83,6 +86,7 @@ const mapFormFieldToDbPayload = (f: FormField, idx: number) => ({
 });
 
 export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent }) => {
+  const queryClient = useQueryClient();
   const { confirm, ConfirmDialogNode } = useConfirm();
   const [savedForms, setSavedForms] = useState<SavedForm[]>([]);
   const [currentForm, setCurrentForm] = useState<FormField[]>([]);
@@ -100,6 +104,30 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
   const [deleteMessage, setDeleteMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [copiedFormId, setCopiedFormId] = useState<string | null>(null);
   const [awardOptions, setAwardOptions] = useState<string[]>([]);
+  const [savedFormsOpen, setSavedFormsOpen] = useState(true);
+  const [elementsPanelOpen, setElementsPanelOpen] = useState(true);
+  const [propertiesPanelOpen, setPropertiesPanelOpen] = useState(true);
+  const [activeFormId, setActiveFormId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!activeEvent?.id) {
+      setActiveFormId(null);
+      return;
+    }
+    void db.getActiveFormForProgram(activeEvent.id).then(setActiveFormId);
+  }, [activeEvent?.id]);
+
+  const handleSetProgramForm = async (formId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!activeEvent?.id) return;
+    try {
+      await db.setActiveFormForProgram(activeEvent.id, formId);
+      setActiveFormId(formId);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.programForms.active(activeEvent.id) });
+    } catch (error) {
+      console.error('Failed to set active form:', error);
+    }
+  };
 
   useEffect(() => {
     setPortalTarget(document.getElementById('dashboard-header-actions'));
@@ -214,6 +242,11 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
       const normalizedFields = ensureMandatoryAwardSelector(fields, pages, awardOptions);
       await db.updateForm(selectedFormId, { pages, theme, is_active: !targetForm.isActive });
       await db.replaceFormFields(selectedFormId, normalizedFields.map(mapFormFieldToDbPayload));
+      if (!targetForm.isActive && activeEvent?.id) {
+        await db.setActiveFormForProgram(activeEvent.id, selectedFormId);
+        setActiveFormId(selectedFormId);
+        await queryClient.invalidateQueries({ queryKey: queryKeys.programForms.active(activeEvent.id) });
+      }
       await loadSavedForms();
       setSaveMessage({
         type: 'success',
@@ -450,14 +483,32 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
         portalTarget
       )}
 
-      <div className="flex flex-col lg:flex-row h-full min-h-0">
+      <div className="relative flex flex-col lg:flex-row h-full min-h-0 flex-1">
         {/* Sidebar - Saved Forms List */}
-        <div className="w-full lg:w-72 lg:flex-shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col z-10 max-h-[38vh] lg:max-h-none">
-          <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-white">
+        <div
+          className={`flex-shrink-0 overflow-hidden transition-[width,max-height,opacity] duration-300 ease-in-out z-10 ${
+            savedFormsOpen
+              ? 'w-full lg:w-72 max-h-[38vh] lg:max-h-none opacity-100'
+              : 'w-0 max-h-0 lg:max-h-none opacity-0 pointer-events-none'
+          }`}
+        >
+          <div className="flex h-full w-full lg:w-72 flex-col border-b border-slate-200 bg-white lg:border-b-0 lg:border-r">
+          <div className="flex items-center justify-between border-b border-slate-200 bg-white p-4">
             <h3 className="text-sm font-bold text-slate-800">Saved Forms</h3>
-            <button onClick={handleNewForm} className="p-1.5 hover:bg-slate-50 hover:text-indigo-600 rounded-lg text-slate-400 transition-colors" title="Create New Form">
-              <Plus className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button onClick={handleNewForm} className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-50 hover:text-indigo-600" title="Create New Form">
+                <Plus className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setSavedFormsOpen(false)}
+                className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                title="Collapse saved forms"
+                aria-label="Collapse saved forms"
+              >
+                <PanelLeftClose className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
@@ -480,6 +531,11 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
                   <div className="pr-6">
                     <div className="flex items-center gap-2">
                       <h4 className={`text-sm font-semibold truncate ${selectedFormId === form.id ? 'text-indigo-900' : 'text-slate-700'}`}>{form.name}</h4>
+                      {activeFormId === form.id && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+                          <Star className="h-3 w-3" /> Active
+                        </span>
+                      )}
                       <span className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold uppercase tracking-wide ${form.isActive
                         ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
                         : 'bg-amber-50 border-amber-200 text-amber-700'
@@ -494,6 +550,15 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
                       <span className="text-[10px] text-slate-500">
                         {new Date(form.createdAt).toLocaleDateString()}
                       </span>
+                      {activeFormId !== form.id && (
+                        <button
+                          type="button"
+                          onClick={(e) => void handleSetProgramForm(form.id, e)}
+                          className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800"
+                        >
+                          Use for submissions
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -539,10 +604,39 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
               ))
             )}
           </div>
+          </div>
         </div>
 
         {/* Main Form Builder Area */}
-        <div className="flex-1 min-w-0 h-full min-h-[48vh]">
+        <div className="relative flex-1 min-w-0 min-h-[48vh]">
+          {!savedFormsOpen && (
+            <FloatingPanelToggle
+              side="left"
+              label="Saved Forms"
+              icon={<FileText className="h-3.5 w-3.5" />}
+              onClick={() => setSavedFormsOpen(true)}
+              className="top-[28%]"
+            />
+          )}
+          {!elementsPanelOpen && (selectedFormId || isCreatingNew) && (
+            <FloatingPanelToggle
+              side="left"
+              label="Form Elements"
+              icon={<Layout className="h-3.5 w-3.5" />}
+              onClick={() => setElementsPanelOpen(true)}
+              className="top-[44%]"
+            />
+          )}
+          {!propertiesPanelOpen && (selectedFormId || isCreatingNew) && (
+            <FloatingPanelToggle
+              side="right"
+              label="Field Properties"
+              icon={<Settings className="h-3.5 w-3.5" />}
+              onClick={() => setPropertiesPanelOpen(true)}
+              className="top-[44%]"
+            />
+          )}
+
           {selectedFormId || isCreatingNew ? (
             <FormBuilder
               key={formBuilderKey}
@@ -556,6 +650,10 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
               isSaving={isSaving}
               paymentConfigured={!!(activeEvent?.paymentConfig?.enabled && activeEvent?.paymentConfig?.publicKey)}
               paymentProvider={activeEvent?.paymentConfig?.provider || 'Razorpay'}
+              elementsPanelOpen={elementsPanelOpen}
+              propertiesPanelOpen={propertiesPanelOpen}
+              onElementsPanelOpenChange={setElementsPanelOpen}
+              onPropertiesPanelOpenChange={setPropertiesPanelOpen}
             />
           ) : (
             <div className="h-full bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-slate-400 text-center p-8">

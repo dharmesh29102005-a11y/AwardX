@@ -1,4 +1,4 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient, type RealtimeChannel } from '@supabase/supabase-js';
 import { trackSupabaseRequest } from './supabaseLoading';
 
 // Environment variables
@@ -210,9 +210,18 @@ export const resolveMediaPublicUrl = (value?: string | null): string => {
     path = `avatars/${path}`;
   }
 
+  // Program page uploads: {timestamp}-{rand}-{name}.ext stored without full path prefix.
+  const isProgramPageAssetFilename =
+    /^\d{10,}-[a-z0-9]+-.+\.[a-z0-9]+$/i.test(path) && path.includes('-');
+
   if (isKnownMediaPath || isLikelyAvatarFilename) {
     const encodedPath = path.split('/').map(encodeURIComponent).join('/');
     return `${base}/storage/v1/object/public/media/${encodedPath}`;
+  }
+
+  // Bare storage filenames must not become relative browser URLs (causes 400s on the dev server).
+  if (isProgramPageAssetFilename || (!path.includes('/') && /\.(png|jpe?g|webp|gif|svg)$/i.test(path))) {
+    return '';
   }
 
   return raw;
@@ -2814,9 +2823,17 @@ export const realtime = {
       .subscribe();
   },
 
-  unsubscribe: (channel: any) => {
-    if (supabase && channel) {
-      supabase.removeChannel(channel);
+  unsubscribe: (channel: RealtimeChannel | null | undefined) => {
+    if (!channel) return;
+    try {
+      // removeChannel while the socket is still connecting throws in React Strict Mode cleanup.
+      if (channel.state === 'joined') {
+        supabase?.removeChannel(channel);
+        return;
+      }
+      void channel.unsubscribe();
+    } catch {
+      // Ignore cleanup races during fast route/view changes.
     }
   },
 };

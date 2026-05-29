@@ -1,16 +1,24 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { createPortal } from 'react-dom';
 import { db } from '../../services/database';
 import { Category, Program } from '../../services/models';
-import { Folder, ChevronRight, Plus, MoreHorizontal, FileText, Trash2, Edit2, ChevronDown, List, Workflow } from 'lucide-react';
+import { Folder, ChevronRight, Plus, MoreHorizontal, FileText, Trash2, Edit2, ChevronDown, List, Workflow, LayoutGrid } from 'lucide-react';
 import { Button } from '../Button';
 import { Modal } from '../Modal';
 import { useConfirm } from '../ConfirmDialog';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CategoriesWorkflow } from './CategoriesWorkflow';
+import { CategoriesTiles } from './CategoriesTiles';
+import type { AwardsViewMode } from '../../lib/awardsViewMode';
+import { getRootCategories } from '../../lib/categoryHierarchy';
+
+export type { AwardsViewMode as CategoriesViewMode };
 
 interface CategoriesViewProps {
    activeEvent: Program | null;
+   viewMode?: AwardsViewMode;
+   onViewModeChange?: (mode: AwardsViewMode) => void;
 }
 
 interface CategoryItemProps {
@@ -170,12 +178,18 @@ const CategoryCard: React.FC<CategoryCardProps> = ({ category, allCategories, on
    );
 };
 
-export const CategoriesView: React.FC<CategoriesViewProps> = ({ activeEvent }) => {
+export const CategoriesView: React.FC<CategoriesViewProps> = ({
+   activeEvent,
+   viewMode: viewModeProp,
+   onViewModeChange,
+}) => {
    const { confirm, ConfirmDialogNode } = useConfirm();
    const [categories, setCategories] = useState<Category[]>([]);
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [newCategory, setNewCategory] = useState({ title: '', parentId: '' });
-   const [viewMode, setViewMode] = useState<'list' | 'workflow'>('list');
+   const [internalViewMode, setInternalViewMode] = useState<AwardsViewMode>('workflow');
+   const viewMode = viewModeProp ?? internalViewMode;
+   const setViewMode = onViewModeChange ?? setInternalViewMode;
 
    const loadCategories = async () => {
       if (!activeEvent) return;
@@ -195,15 +209,21 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({ activeEvent }) =
 
    const handleCreate = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (activeEvent && newCategory.title) {
+      if (!activeEvent || !newCategory.title.trim()) return;
+
+      try {
          await db.addCategory({
-            title: newCategory.title,
+            title: newCategory.title.trim(),
             programId: activeEvent.id,
-            parentId: newCategory.parentId || null
+            parentId: newCategory.parentId || null,
          });
-         loadCategories(); // Reload to reflect changes
+         await loadCategories();
          setIsModalOpen(false);
          setNewCategory({ title: '', parentId: '' });
+         toast.success('Category created');
+      } catch (error) {
+         const message = error instanceof Error ? error.message : 'Failed to create category';
+         toast.error(message);
       }
    };
 
@@ -219,16 +239,30 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({ activeEvent }) =
         description: 'This will also delete all its subcategories. This cannot be undone.',
         confirmLabel: 'Delete category',
       });
-      if (!ok) return;
-      await db.deleteCategory(categoryId);
-      loadCategories();
+      if (!ok || !activeEvent) return;
+      try {
+         await db.deleteCategory(categoryId, activeEvent.id);
+         await loadCategories();
+         toast.success('Category deleted');
+      } catch (error) {
+         const message = error instanceof Error ? error.message : 'Failed to delete category';
+         toast.error(message);
+      }
    };
 
-   const rootCategories = categories.filter(c => c.parentId === null);
+   const rootCategories = getRootCategories(categories);
    const parentCategory = categories.find(c => c.id === newCategory.parentId);
 
+   const isCanvasView = viewMode === 'workflow' || viewMode === 'tiles';
+
    return (
-      <div className={viewMode === 'list' ? 'p-4 lg:p-8 max-w-7xl mx-auto min-h-full' : 'h-full flex flex-col'}>
+      <div
+         className={
+            viewMode === 'list'
+               ? 'p-4 lg:p-8 max-w-7xl mx-auto min-h-full'
+               : 'flex flex-col min-h-[calc(100vh-7rem)] h-[calc(100vh-7rem)] overflow-hidden'
+         }
+      >
          {ConfirmDialogNode}
          {/* Portal Controls to Header */}
          {portalTarget && createPortal(
@@ -245,9 +279,16 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({ activeEvent }) =
                   <button
                      onClick={() => setViewMode('workflow')}
                      className={`p-2 rounded-md transition-all ${viewMode === 'workflow' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
-                     title="Workflow View"
+                     title="2D diagram — pan, zoom, and connect categories"
                   >
                      <Workflow className="w-4 h-4" />
+                  </button>
+                  <button
+                     onClick={() => setViewMode('tiles')}
+                     className={`p-2 rounded-md transition-all ${viewMode === 'tiles' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                     title="Tile grid — all categories at a glance"
+                  >
+                     <LayoutGrid className="w-4 h-4" />
                   </button>
                </div>
 
@@ -266,8 +307,19 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({ activeEvent }) =
                animate={{ opacity: 1 }}
                exit={{ opacity: 0 }}
                transition={{ duration: 0.2 }}
-               className={`flex-1 min-h-0 ${viewMode === 'workflow' ? 'h-full' : ''}`}
+               className={`flex-1 min-h-0 ${isCanvasView ? 'h-full' : ''}`}
             >
+               {isCanvasView && (
+                  <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-3 lg:px-6">
+                     <h1 className="text-lg font-bold text-slate-900">Awards & Categories</h1>
+                     <p className="text-sm text-slate-500">
+                        {viewMode === 'workflow'
+                           ? 'Drag nodes to arrange your award tree. Scroll to zoom, drag the canvas to pan.'
+                           : 'Browse every category and subcategory in a flat grid.'}
+                     </p>
+                  </div>
+               )}
+
                {viewMode === 'list' && (
                   <div className="space-y-8 pb-12">
                      <div>
@@ -300,8 +352,14 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({ activeEvent }) =
                )}
 
                {viewMode === 'workflow' && (
-                  <div className="h-full w-full bg-slate-50">
+                  <div className="flex-1 min-h-0 h-full w-full overflow-hidden overscroll-none">
                      <CategoriesWorkflow categories={categories} onAddSub={openModal} programId={activeEvent?.id} />
+                  </div>
+               )}
+
+               {viewMode === 'tiles' && (
+                  <div className="flex-1 min-h-0 overflow-y-auto p-4 lg:p-6">
+                     <CategoriesTiles categories={categories} onAddSub={openModal} />
                   </div>
                )}
             </motion.div>

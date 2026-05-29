@@ -24,6 +24,12 @@ import { auth } from '../../services/supabase';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { PublishedLockBanner } from './PublishedLockBanner';
 import { ProgramTileHub } from './ProgramTileHub';
+import { readAwardsViewMode, writeAwardsViewMode, type AwardsViewMode } from '../../lib/awardsViewMode';
+import {
+  readScheduleRepresentation,
+  writeStoredRepresentation,
+  type ScheduleRepresentation,
+} from '../../lib/roundRepresentationConversion';
 
 const ScheduleRoundsView = lazy(() =>
   import('./scheduleRounds/ScheduleRoundsView').then((m) => ({ default: m.ScheduleRoundsView })),
@@ -43,6 +49,8 @@ interface DashboardProps {
 export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [activeEvent, setActiveEvent] = useState<Program | null>(null);
   const [currentView, setCurrentView] = useState('overview');
+  const [awardsViewMode, setAwardsViewMode] = useState<AwardsViewMode>('workflow');
+  const [scheduleRepresentation, setScheduleRepresentation] = useState<ScheduleRepresentation>('tiles');
   const [isInitializing, setIsInitializing] = useState(true);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -164,6 +172,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     };
   }, [activeEvent, currentView]);
 
+  useEffect(() => {
+    if (activeEvent?.id) {
+      setAwardsViewMode(readAwardsViewMode(activeEvent.id));
+      setScheduleRepresentation(readScheduleRepresentation(activeEvent.id));
+    }
+  }, [activeEvent?.id]);
+
+  useEffect(() => {
+    if (activeEvent?.id) {
+      writeAwardsViewMode(activeEvent.id, awardsViewMode);
+    }
+  }, [activeEvent?.id, awardsViewMode]);
+
+  useEffect(() => {
+    if (activeEvent?.id) {
+      writeStoredRepresentation(activeEvent.id, scheduleRepresentation);
+    }
+  }, [activeEvent?.id, scheduleRepresentation]);
+
   const renderView = () => {
     switch (currentView) {
       case 'tile-hub':
@@ -180,23 +207,39 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       case 'schedule-rounds':
         return (
           <Suspense fallback={<ViewLoader />}>
-            <ScheduleRoundsView activeEvent={activeEvent} />
+            <ScheduleRoundsView
+              activeEvent={activeEvent}
+              representation={scheduleRepresentation}
+              onRepresentationChange={setScheduleRepresentation}
+            />
           </Suspense>
         );
 
       case 'awards':
-        return <CategoriesView activeEvent={activeEvent} />;
+        return (
+          <CategoriesView
+            activeEvent={activeEvent}
+            viewMode={awardsViewMode}
+            onViewModeChange={setAwardsViewMode}
+          />
+        );
       case 'templates':
         return activeEvent?.status === 'Active'
           ? <PublishedLockBanner program={activeEvent} sectionName="Form Builder" />
           : <FormBuilderView activeEvent={activeEvent} />;
       case 'submissions':
-        return <SubmissionTable activeEvent={activeEvent} />;
+        return <SubmissionTable activeEvent={activeEvent} onNavigate={setCurrentView} />;
 
       case 'judging':
         return <JudgingView activeEvent={activeEvent} />;
       case 'voting':
-        return <ScheduleRoundsView activeEvent={activeEvent} />;
+        return (
+          <ScheduleRoundsView
+            activeEvent={activeEvent}
+            representation={scheduleRepresentation}
+            onRepresentationChange={setScheduleRepresentation}
+          />
+        );
       case 'reach':
         return <ReachView />;
       case 'analytics':
@@ -255,8 +298,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       onSelectProgram={setActiveEvent}
       onLogout={onLogout}
       onSwitchEvent={() => setActiveEvent(null)}
-      noPadding={currentView === 'awards' || currentView === 'templates' || currentView === 'schedule-rounds' || currentView === 'builder' || currentView === 'program-details'}
+      noPadding={currentView === 'awards' || currentView === 'templates' || currentView === 'schedule-rounds' || currentView === 'builder' || currentView === 'program-details' || currentView === 'submissions'}
       hideHeader={currentView === 'builder'}
+      awardsViewMode={awardsViewMode}
+      onAwardsViewModeChange={setAwardsViewMode}
+      scheduleRepresentation={scheduleRepresentation}
+      onScheduleRepresentationChange={setScheduleRepresentation}
     >
       <motion.div
         key={currentView}

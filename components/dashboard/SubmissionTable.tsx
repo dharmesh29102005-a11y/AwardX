@@ -1,7 +1,8 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { useConfirm } from '../ConfirmDialog';
-import { Filter, Download, Eye, Calendar, Search, ChevronDown, ChevronLeft, ChevronRight, User, UserX, Plus, Trash2, CheckCircle, XCircle, Gavel, ArrowUpDown, MoreVertical, Sparkles } from 'lucide-react';
+import { Filter, Download, Eye, Calendar, Search, ChevronDown, ChevronLeft, ChevronRight, User, UserX, Plus, Trash2, CheckCircle, XCircle, Gavel, ArrowUpDown, MoreVertical, Sparkles, LayoutTemplate, AlertCircle, ExternalLink } from 'lucide-react';
 
 import { db } from '../../services/database';
 import { Program, Submission } from '../../services/models';
@@ -13,6 +14,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { TableSkeleton } from '../SkeletonLoader';
 import { realtime } from '../../services/supabase';
 import { queryKeys } from '../../services/queryKeys';
+import { getProgramFormSetupState } from '../../lib/programFormSetup';
 
 const StatusBadge = ({ status }: { status: string }) => {
    const variants: Record<string, { container: string; icon: React.ReactNode; dot: string }> = {
@@ -55,9 +57,10 @@ const StatusBadge = ({ status }: { status: string }) => {
 
 interface SubmissionTableProps {
    activeEvent?: Program | null;
+   onNavigate?: (view: string) => void;
 }
 
-export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent }) => {
+export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, onNavigate }) => {
    const queryClient = useQueryClient();
    const { confirm, ConfirmDialogNode } = useConfirm();
    const [isModalOpen, setIsModalOpen] = useState(false);
@@ -91,6 +94,25 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
       setSelectedIds([]);
    }, [page]);
 
+   const formsQuery = useQuery({
+      queryKey: queryKeys.forms.byProgram(activeEvent?.id ?? ''),
+      queryFn: () => db.getForms(activeEvent!.id),
+      enabled: !!activeEvent?.id,
+      staleTime: 30_000,
+   });
+
+   const activeFormQuery = useQuery({
+      queryKey: queryKeys.programForms.active(activeEvent?.id ?? ''),
+      queryFn: () => db.getActiveFormForProgram(activeEvent!.id),
+      enabled: !!activeEvent?.id,
+      staleTime: 30_000,
+   });
+
+   const forms = formsQuery.data || [];
+   const activeFormId = activeFormQuery.data ?? activeEvent?.activeFormId ?? null;
+   const formSetup = getProgramFormSetupState(forms, activeFormId);
+   const canViewSubmissions = formSetup.status === 'ready';
+
    const submissionsQuery = useQuery({
       queryKey: queryKeys.submissions.paginated(activeEvent?.id ?? 'all', page, debouncedSearch),
       queryFn: () => db.getSubmissionsPaginated({
@@ -99,6 +121,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
          pageSize,
          search: debouncedSearch,
       }),
+      enabled: !!activeEvent?.id && canViewSubmissions,
       staleTime: 30_000,
    });
 
@@ -118,7 +141,17 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
       return () => {
          realtime.unsubscribe(channel);
       };
-   }, [activeEvent?.id, queryClient]);
+   }, [activeEvent?.id, queryClient, page, debouncedSearch]);
+
+   useEffect(() => {
+      if (submissionsQuery.isError) {
+         const message =
+            submissionsQuery.error instanceof Error
+               ? submissionsQuery.error.message
+               : 'Failed to load submissions';
+         toast.error(message);
+      }
+   }, [submissionsQuery.isError, submissionsQuery.error]);
 
    const submissions = submissionsQuery.data?.items || [];
    const judges = judgesQuery.data || [];
@@ -141,17 +174,92 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
       setSelectedIds([]);
    };
 
+   const renderFormSetupGate = () => {
+      if (formsQuery.isLoading || activeFormQuery.isLoading) {
+         return (
+            <div className="flex flex-1 items-center justify-center p-12">
+               <TableSkeleton rows={4} columns={1} />
+            </div>
+         );
+      }
+
+      if (formSetup.status === 'no_forms') {
+         return (
+            <div className="flex flex-1 flex-col items-center justify-center gap-4 p-12 text-center">
+               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+                  <LayoutTemplate className="h-8 w-8" />
+               </div>
+               <div className="max-w-md space-y-2">
+                  <h2 className="text-xl font-bold text-slate-900">Create a submission form first</h2>
+                  <p className="text-sm text-slate-500">
+                     Submissions are collected through your program form. Build one in Form Builder, then select it for this event.
+                  </p>
+               </div>
+               <Button onClick={() => onNavigate?.('templates')}>
+                  <Plus className="mr-2 h-4 w-4" /> Create Form
+               </Button>
+            </div>
+         );
+      }
+
+      if (formSetup.status === 'no_selection' || formSetup.status === 'invalid_selection') {
+         return (
+            <div className="flex flex-1 flex-col items-center justify-center gap-4 p-12 text-center">
+               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+                  <AlertCircle className="h-8 w-8" />
+               </div>
+               <div className="max-w-md space-y-2">
+                  <h2 className="text-xl font-bold text-slate-900">Select a submission form</h2>
+                  <p className="text-sm text-slate-500">{formSetup.message}</p>
+               </div>
+               <Button onClick={() => onNavigate?.('templates')}>
+                  <LayoutTemplate className="mr-2 h-4 w-4" /> Go to Form Builder
+               </Button>
+            </div>
+         );
+      }
+
+      if (formSetup.status === 'unpublished') {
+         return (
+            <div className="flex flex-1 flex-col items-center justify-center gap-4 p-12 text-center">
+               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+                  <AlertCircle className="h-8 w-8" />
+               </div>
+               <div className="max-w-md space-y-2">
+                  <h2 className="text-xl font-bold text-slate-900">Publish your submission form</h2>
+                  <p className="text-sm text-slate-500">{formSetup.message}</p>
+               </div>
+               <Button onClick={() => onNavigate?.('templates')}>
+                  <ExternalLink className="mr-2 h-4 w-4" /> Publish Form
+               </Button>
+            </div>
+         );
+      }
+
+      return null;
+   };
+
    const handleCreate = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!newSub.title || !newSub.applicant) return;
+      if (!activeEvent?.id) {
+         toast.error('Select a program before creating a submission');
+         return;
+      }
 
-      await db.addSubmission({
-         ...newSub,
-         programId: activeEvent?.id
-      } as any);
-      await refreshSubmissions();
-      setIsModalOpen(false);
-      setNewSub({ title: '', applicant: '', category: 'General', status: 'Pending' });
+      try {
+         await db.addSubmission({
+            ...newSub,
+            programId: activeEvent.id,
+         });
+         await refreshSubmissions();
+         setIsModalOpen(false);
+         setNewSub({ title: '', applicant: '', category: 'General', status: 'Pending' });
+         toast.success('Submission created');
+      } catch (error) {
+         const message = error instanceof Error ? error.message : 'Failed to create submission';
+         toast.error(message);
+      }
    };
 
    const handleView = (submission: Submission) => {
@@ -201,15 +309,23 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
          if (!ok) return;
       }
 
+      if (!activeEvent?.id) {
+         toast.error('Select a program before updating submissions');
+         return;
+      }
+
       setIsBulkProcessing(true);
       try {
          if (action === 'Delete') {
-            await db.deleteSubmissions(selectedIds);
+            await db.deleteSubmissions(selectedIds, activeEvent.id);
          } else {
             const statusMap: any = { 'Accept': 'Accepted', 'Reject': 'Rejected', 'Shortlist': 'Shortlisted' };
-            await db.bulkUpdateSubmissions(selectedIds, { status: statusMap[action] } as any);
+            await db.bulkUpdateSubmissions(selectedIds, { status: statusMap[action] } as any, activeEvent.id);
          }
          await refreshSubmissions();
+      } catch (error) {
+         const message = error instanceof Error ? error.message : 'Bulk action failed';
+         toast.error(message);
       } finally {
          setIsBulkProcessing(false);
       }
@@ -264,48 +380,67 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
    };
 
    return (
-      <div className="space-y-8 relative pb-24">
+      <div className="flex h-full min-h-0 w-full flex-col gap-4 px-4 pb-6 pt-4 lg:px-6">
          {ConfirmDialogNode}
-         {/* Enhanced Header Section */}
-         <div className="flex flex-col gap-5 px-1 lg:flex-row lg:items-end lg:justify-between">
-            <div className="space-y-3">
-               <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 shadow-sm">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+         {/* Header */}
+         <div className="flex shrink-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0 space-y-1">
+               <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                   Submission workspace
                </div>
-               <div className="space-y-2">
-                  <h1 className="text-4xl font-black tracking-tight text-slate-950 leading-none">Submissions</h1>
-                  <p className="max-w-2xl text-sm font-medium leading-6 text-slate-500">
-                     Review entries, assess status at a glance, and move quickly from search to action.
-                  </p>
-               </div>
+               <h1 className="text-2xl font-black tracking-tight text-slate-950 lg:text-3xl">Submissions</h1>
+               <p className="text-sm text-slate-500">
+                  Review entries, assess status, and take action across the full program table.
+               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-3">
-               <div className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
-                  <div className="flex h-8 min-w-8 items-center justify-center rounded-xl bg-slate-100 text-sm font-black text-slate-700">{total}</div>
+            <div className="flex flex-wrap items-center gap-2 lg:gap-3">
+               <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                  <div className="flex h-8 min-w-8 items-center justify-center rounded-lg bg-slate-100 text-sm font-black text-slate-700">{total}</div>
                   <div className="leading-tight">
-                     <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Total entries</div>
-                     <div className="text-sm font-semibold text-slate-900">{selectedIds.length} selected</div>
+                     <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total</div>
+                     <div className="text-xs font-semibold text-slate-700">{selectedIds.length} selected</div>
                   </div>
                </div>
                <button
                   onClick={handleExportCsv}
-                  className="h-11 px-5 bg-white border border-slate-200 rounded-2xl text-slate-700 hover:bg-slate-50 font-bold text-sm flex items-center gap-2.5 transition-all shadow-sm shadow-slate-200/50 hover:shadow-md"
+                  className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
                >
-                  <Download className="w-4 h-4 text-slate-400" /> Export CSV
+                  <Download className="h-4 w-4 text-slate-400" /> Export CSV
                </button>
                <button
                   onClick={() => setIsModalOpen(true)}
-                  className="h-11 px-6 bg-slate-950 text-white rounded-2xl font-bold text-sm flex items-center gap-2.5 hover:bg-indigo-600 transition-all shadow-lg shadow-slate-950/15 hover:shadow-indigo-300"
+                  disabled={!canViewSubmissions}
+                  className="flex h-10 items-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white transition-colors hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-40"
                >
-                  <Plus className="w-4 h-4" /> Add Submission
+                  <Plus className="h-4 w-4" /> Add Submission
                </button>
             </div>
          </div>
 
-         <div className="overflow-hidden rounded-[2rem] border border-slate-200/80 bg-white shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
+         {canViewSubmissions && formSetup.activeForm && (
+            <div className="flex shrink-0 items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3">
+               <div className="min-w-0">
+                  <p className="text-xs font-bold uppercase tracking-wider text-indigo-500">Active submission form</p>
+                  <p className="truncate text-sm font-semibold text-slate-800">{formSetup.activeForm.title || 'Untitled form'}</p>
+               </div>
+               <button
+                  type="button"
+                  onClick={() => onNavigate?.('templates')}
+                  className="shrink-0 text-xs font-semibold text-indigo-700 hover:text-indigo-900"
+               >
+                  Change form
+               </button>
+            </div>
+         )}
+
+         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            {!canViewSubmissions ? (
+               renderFormSetupGate()
+            ) : (
+            <>
             {/* Premium Toolbar */}
-            <div className="flex flex-col gap-4 border-b border-slate-100 bg-gradient-to-b from-white to-slate-50/40 p-5 sm:flex-row sm:items-center">
+            <div className="flex shrink-0 flex-col gap-3 border-b border-slate-100 bg-slate-50/50 p-4 sm:flex-row sm:items-center">
                <div className="relative flex-1 group">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
                   <input
@@ -330,7 +465,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
             </div>
 
             {/* Mobile Card List */}
-            <div className="md:hidden divide-y divide-slate-100">
+            <div className="min-h-0 flex-1 overflow-y-auto md:hidden divide-y divide-slate-100">
                {isLoading && (
                   <div className="p-4">
                      <TableSkeleton rows={4} columns={1} />
@@ -399,8 +534,8 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
             </div>
 
             {/* Desktop Table */}
-            <div className="hidden md:block overflow-x-auto">
-               <table className="w-full min-w-[1000px] border-collapse text-left">
+            <div className="hidden min-h-0 flex-1 overflow-auto md:block">
+               <table className="w-full border-collapse text-left">
                   <thead>
                      <tr className="border-b border-slate-100 bg-slate-50/60 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
                         <th className="p-5 w-16 text-center">
@@ -585,7 +720,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
                </table>
             </div>
 
-            <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/40 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex shrink-0 flex-col gap-3 border-t border-slate-100 bg-slate-50/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between lg:px-6">
                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                   Showing {showingStart}-{showingEnd} of {total}
                </p>
@@ -621,6 +756,8 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
                   </button>
                </div>
             </div>
+            </>
+            )}
          </div>
 
          {/* Premium Floating Actions */}

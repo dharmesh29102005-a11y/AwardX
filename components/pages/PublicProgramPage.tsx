@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { AlertCircle, CalendarDays, ChevronDown, Trophy, ArrowRight, Award, Sparkles, Layers3 } from 'lucide-react';
 import { getPublicOverviewByProgramId, getPublicOverviewBySlug } from '../../services/overviewApi';
+import { resolveMediaPublicUrl } from '../../services/supabase';
 import { queryKeys } from '../../services/queryKeys';
 import { Footer } from '../Footer';
 import { type PublicPagePayload } from './PublicPageSections';
@@ -176,7 +177,8 @@ export const PublicProgramPage: React.FC = () => {
     const heroSection = sections.find((s: any) => s.section_type === 'hero');
     const aboutSection = sections.find((s: any) => s.section_type === 'about');
 
-    const coverImage: string = heroSection?.content?.backgroundImage || data.program.cover_image_url || '';
+    const coverImage: string =
+        resolveMediaPublicUrl(heroSection?.content?.backgroundImage || data.program.cover_image_url) || '';
     const tagline: string = heroSection?.content?.subtitle || '';
     const nominateUrl: string = heroSection?.content?.primaryCtaLink || '#';
     const nominateButtonText: string = heroSection?.content?.primaryCtaText || 'Nominate Now';

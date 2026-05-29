@@ -1,0 +1,132 @@
+import { Router } from 'express';
+import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
+import { ensureCanManageProgram } from '../middleware/programManagement.js';
+import { getSupabaseAdmin } from '../supabase.js';
+
+const router = Router();
+
+function mapCategory(row: Record<string, unknown>) {
+  return {
+    id: row.id,
+    title: row.title,
+    program_id: row.program_id,
+    parent_id: row.parent_id,
+    description: row.description,
+    sort_order: row.sort_order,
+    entries_count: row.entries_count,
+    created_at: row.created_at,
+  };
+}
+
+router.get('/:programId/categories', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const { programId } = req.params;
+  if (!programId) {
+    return res.status(400).json({ error: 'programId is required' });
+  }
+
+  try {
+    const access = await ensureCanManageProgram(req.userId || '', programId);
+    if (!access.ok) {
+      return res.status(access.status).json({ error: access.error });
+    }
+
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase
+      .from('categories')
+      .select('*')
+      .eq('program_id', programId)
+      .order('sort_order', { ascending: true });
+
+    if (error) {
+      return res.status(500).json({ error: error.message || 'Failed to load categories' });
+    }
+
+    return res.json({ data: (data || []).map((row) => mapCategory(row as Record<string, unknown>)) });
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Unexpected server error' });
+  }
+});
+
+router.post('/:programId/categories', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const { programId } = req.params;
+  const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
+  const parentId = req.body?.parent_id ?? req.body?.parentId ?? null;
+
+  if (!programId) {
+    return res.status(400).json({ error: 'programId is required' });
+  }
+  if (!title) {
+    return res.status(400).json({ error: 'title is required' });
+  }
+
+  try {
+    const access = await ensureCanManageProgram(req.userId || '', programId);
+    if (!access.ok) {
+      return res.status(access.status).json({ error: access.error });
+    }
+
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase
+      .from('categories')
+      .insert({
+        program_id: programId,
+        parent_id: parentId || null,
+        title,
+      })
+      .select()
+      .single();
+
+    if (error || !data) {
+      return res.status(500).json({ error: error?.message || 'Failed to create category' });
+    }
+
+    return res.status(201).json({ data: mapCategory(data as Record<string, unknown>) });
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Unexpected server error' });
+  }
+});
+
+router.delete('/:programId/categories/:categoryId', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const { programId, categoryId } = req.params;
+  if (!programId || !categoryId) {
+    return res.status(400).json({ error: 'programId and categoryId are required' });
+  }
+
+  try {
+    const access = await ensureCanManageProgram(req.userId || '', programId);
+    if (!access.ok) {
+      return res.status(access.status).json({ error: access.error });
+    }
+
+    const supabase = getSupabaseAdmin();
+    const { data: existing, error: existingError } = await supabase
+      .from('categories')
+      .select('id')
+      .eq('id', categoryId)
+      .eq('program_id', programId)
+      .maybeSingle();
+
+    if (existingError) {
+      return res.status(500).json({ error: existingError.message || 'Failed to load category' });
+    }
+    if (!existing) {
+      return res.status(404).json({ error: 'Category not found' });
+    }
+
+    const { error } = await supabase
+      .from('categories')
+      .delete()
+      .eq('id', categoryId)
+      .eq('program_id', programId);
+
+    if (error) {
+      return res.status(500).json({ error: error.message || 'Failed to delete category' });
+    }
+
+    return res.json({ ok: true });
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Unexpected server error' });
+  }
+});
+
+export default router;

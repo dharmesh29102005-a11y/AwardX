@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Round } from '../../../types/scheduleRounds';
 import { RoundConfigurationPanel } from './RoundConfigurationPanel';
-import { Plus, GripVertical, Users, Globe, Shield, Settings, Calendar, ChevronRight } from 'lucide-react';
+import { Plus, GripVertical, Users, Globe, Shield, Settings, Calendar, Play } from 'lucide-react';
+import { primaryActionLabel } from '../../../lib/roundScheduleUtils';
 import { Button } from '../../Button';
 import { Reorder } from 'framer-motion';
 import { Modal } from '../../Modal';
@@ -190,7 +191,11 @@ export const TileView: React.FC<TileViewProps> = ({
           </div>
 
           <Reorder.Group axis="y" values={items} onReorder={handleReorder} className="space-y-4">
-            {items.map((round) => (
+            {items.map((round, index) => {
+              const hasNextRound = index < items.length - 1;
+              const pipelineAction = primaryActionLabel(round, hasNextRound);
+
+              return (
               <Reorder.Item
                 key={round.id}
                 value={round}
@@ -319,29 +324,27 @@ export const TileView: React.FC<TileViewProps> = ({
                       </div>
                     )}
 
-                    {(round.status === 'active' || round.status === 'completed') && (
+                    {pipelineAction && !round.isFinalized && onAdvanceRound && (
                       <div className="mt-3 pt-3 border-t border-slate-100">
                         <button
                           type="button"
                           onClick={(event) => {
                             event.stopPropagation();
-                            if (round.status !== 'completed' && onAdvanceRound) onAdvanceRound(round.id);
+                            onAdvanceRound(round.id);
                           }}
-                          disabled={round.status === 'completed'}
-                          className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all shadow-sm ${
-                            round.status === 'completed'
-                              ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                              : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                          }`}
+                          disabled={round.id.startsWith('round-')}
+                          className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all shadow-sm bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          <ChevronRight className="w-3.5 h-3.5" /> {round.status === 'completed' ? 'Round Advanced' : 'Advance to Next Round'}
+                          <Play className="w-3.5 h-3.5" />
+                          {pipelineAction}
                         </button>
                       </div>
                     )}
                   </div>
                 </div>
               </Reorder.Item>
-            ))}
+            );
+            })}
           </Reorder.Group>
         </>
       )}

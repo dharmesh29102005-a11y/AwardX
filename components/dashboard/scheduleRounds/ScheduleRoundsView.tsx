@@ -40,6 +40,8 @@ interface RoundCardInsight {
 
 interface ScheduleRoundsViewProps {
   activeEvent: Program | null;
+  representation?: ScheduleRepresentation;
+  onRepresentationChange?: (mode: ScheduleRepresentation) => void;
 }
 
 type AdvancementModalState = {
@@ -48,8 +50,26 @@ type AdvancementModalState = {
   criteriaOverride: AdvancementCriteria;
 };
 
-export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEvent }) => {
-  const [representation, setRepresentation] = useState<ScheduleRepresentation>('tiles');
+export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
+  activeEvent,
+  representation: representationProp,
+  onRepresentationChange,
+}) => {
+  const [internalRepresentation, setInternalRepresentation] = useState<ScheduleRepresentation>('tiles');
+  const representation = representationProp ?? internalRepresentation;
+
+  const updateRepresentation = useCallback(
+    (mode: ScheduleRepresentation) => {
+      if (representationProp === undefined) {
+        setInternalRepresentation(mode);
+      }
+      onRepresentationChange?.(mode);
+      if (activeEvent) {
+        writeStoredRepresentation(activeEvent.id, mode);
+      }
+    },
+    [activeEvent, onRepresentationChange, representationProp],
+  );
   const [conversionTarget, setConversionTarget] = useState<ScheduleRepresentation | null>(null);
   const [conversionAnalysis, setConversionAnalysis] = useState<ConversionAnalysis | null>(null);
   const [isConverting, setIsConverting] = useState(false);
@@ -196,7 +216,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
       setHasCustomEdges(customDetected);
 
       const storedRepresentation = readStoredRepresentation(activeEvent.id);
-      setRepresentation(storedRepresentation || inferRepresentation(normalizedRounds, loadedEdges));
+      updateRepresentation(storedRepresentation || inferRepresentation(normalizedRounds, loadedEdges));
 
       if (customDetected && !customEdgeWarningShown.current) {
         customEdgeWarningShown.current = true;
@@ -211,7 +231,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
     } finally {
       setIsLoading(false);
     }
-  }, [activeEvent, enforceNominationFirst]);
+  }, [activeEvent, enforceNominationFirst, updateRepresentation]);
 
   useEffect(() => {
     void loadRoundInsights(rounds);
@@ -255,8 +275,8 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
 
   const handleRoundDelete = useCallback(
     async (roundId: string) => {
-      if (!roundId.startsWith('round-')) {
-        await scheduleRoundsService.deleteRound(roundId);
+      if (!roundId.startsWith('round-') && activeEvent) {
+        await scheduleRoundsService.deleteRound(roundId, activeEvent.id);
       }
 
       let nextRounds: Round[] = [];
@@ -279,7 +299,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
 
       setSelectedRoundId((prev) => (prev === roundId ? null : prev));
     },
-    [persistWorkflowEdges, roundEdges],
+    [activeEvent, persistWorkflowEdges, roundEdges],
   );
 
   const handleRoundReorder = useCallback(
@@ -366,8 +386,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
       setRounds(converted.rounds);
       setRoundEdges(savedEdges);
       setHasCustomEdges(customAfterSave);
-      setRepresentation(conversionTarget);
-      writeStoredRepresentation(activeEvent.id, conversionTarget);
+      updateRepresentation(conversionTarget);
       setConversionTarget(null);
       setConversionAnalysis(null);
       customEdgeWarningShown.current = false;
@@ -383,7 +402,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
     } finally {
       setIsConverting(false);
     }
-  }, [activeEvent, conversionTarget, roundEdges, rounds]);
+  }, [activeEvent, conversionTarget, roundEdges, rounds, updateRepresentation]);
 
   const openAdvancementPreview = useCallback(async (round: Round) => {
     const criteriaOverride = shortlistConfigToCriteria(round.shortlistConfig, round.type);

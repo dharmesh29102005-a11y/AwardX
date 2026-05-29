@@ -11,7 +11,7 @@ import { Modal } from '../Modal';
 import { useConfirm } from '../ConfirmDialog';
 import { scheduleRoundsService } from '../../services/scheduleRoundsDb';
 import { sendJudgeInviteEmail, resendJudgeInvite } from '../../services/email';
-import { judgingCriteria, supabase, realtime } from '../../services/supabase';
+import { judgingCriteria, refreshUserCache, supabase, realtime } from '../../services/supabase';
 import { queryKeys } from '../../services/queryKeys';
 import { JudgeScoringModal } from './JudgeScoringModal';
 
@@ -90,12 +90,16 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    const { data: criteriaData } = useQuery<JudgingCriterion[]>({
       queryKey: queryKeys.judging.criteria(activeEvent?.id ?? ''),
       queryFn: async (): Promise<JudgingCriterion[]> => {
-         if (!supabase || !activeEvent?.id) return defaultCriteria;
-         const { data } = await supabase
-            .from('judging_criteria')
-            .select('*')
-            .eq('program_id', activeEvent.id)
-            .order('sort_order');
+         if (!activeEvent?.id) return defaultCriteria;
+
+         await refreshUserCache();
+         const { data, error } = await judgingCriteria.getByProgram(activeEvent.id);
+
+         if (error) {
+            console.warn('[judging] criteria load failed:', error);
+            return defaultCriteria;
+         }
+
          if (data && data.length > 0) {
             return data.map((c: Record<string, unknown>) => ({
                id: String(c.id),
@@ -107,6 +111,8 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                sortOrder: Number(c.sort_order) || 0,
             }));
          }
+
+         if (!supabase) return defaultCriteria;
 
          // Bootstrap defaults for new programs so scoring always has UUID-backed criteria.
          const bootstrapPayload = defaultCriteria.map((criterion, index) => ({
@@ -125,7 +131,12 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
             .select('*')
             .order('sort_order');
 
-         if (!insertError && inserted && inserted.length > 0) {
+         if (insertError) {
+            console.warn('[judging] criteria bootstrap failed:', insertError);
+            return defaultCriteria;
+         }
+
+         if (inserted && inserted.length > 0) {
             return inserted.map((c: Record<string, unknown>) => ({
                id: String(c.id),
                name: String(c.name),

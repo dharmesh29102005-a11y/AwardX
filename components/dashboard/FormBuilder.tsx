@@ -4,7 +4,7 @@ import {
   ImageIcon, Link2, List, Calendar, Mail, CheckSquare, Radio,
   MoreVertical, ArrowUp, ArrowDown, X, AlertCircle, Palette, Layers,
   ChevronLeft, ChevronRight, Layout, Edit3, Move, ChevronDown, Award,
-  CheckCircle, XCircle, CreditCard
+  CheckCircle, XCircle, CreditCard, PanelLeftClose, PanelRightClose
 } from 'lucide-react';
 import { Button } from '../Button';
 import { useConfirm } from '../ConfirmDialog';
@@ -54,6 +54,10 @@ interface FormBuilderProps {
   isSaving?: boolean;
   paymentConfigured?: boolean;
   paymentProvider?: string;
+  elementsPanelOpen?: boolean;
+  propertiesPanelOpen?: boolean;
+  onElementsPanelOpenChange?: (open: boolean) => void;
+  onPropertiesPanelOpenChange?: (open: boolean) => void;
 }
 
 export interface FormBuilderRef {
@@ -115,7 +119,11 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
   initialTheme = defaultTheme,
   isSaving = false,
   paymentConfigured = false,
-  paymentProvider
+  paymentProvider,
+  elementsPanelOpen = true,
+  propertiesPanelOpen = true,
+  onElementsPanelOpenChange,
+  onPropertiesPanelOpenChange,
 }, ref) => {
   const { confirm: confirmDialog, ConfirmDialogNode } = useConfirm();
 
@@ -871,17 +879,36 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
     );
   }
 
+  const collapseElementsPanel = () => onElementsPanelOpenChange?.(false);
+  const collapsePropertiesPanel = () => onPropertiesPanelOpenChange?.(false);
+
   return (
     <div className="flex flex-col xl:flex-row h-full min-h-0 bg-slate-50 font-sans">
       {ConfirmDialogNode}
       {/* 1. Left Sidebar: Toolkit */}
-      <div className="w-full xl:w-72 bg-white border-b xl:border-b-0 xl:border-r border-slate-200 flex flex-col z-20 shadow-xl shadow-slate-200/50 max-h-[42vh] xl:max-h-none">
-        <div className="p-5 border-b border-slate-100">
-          <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <Layout className="w-5 h-5 text-indigo-600" />
+      <div
+        className={`flex-shrink-0 overflow-hidden transition-[width,max-height,opacity] duration-300 ease-in-out ${
+          elementsPanelOpen
+            ? 'w-full xl:w-72 max-h-[42vh] xl:max-h-none opacity-100'
+            : 'w-0 max-h-0 xl:max-h-none opacity-0 pointer-events-none'
+        }`}
+      >
+        <div className="flex h-full w-full xl:w-72 flex-col border-b border-slate-200 bg-white shadow-xl shadow-slate-200/50 xl:border-b-0 xl:border-r">
+        <div className="flex items-center justify-between border-b border-slate-100 p-5">
+          <h2 className="flex items-center gap-2 text-lg font-bold text-slate-800">
+            <Layout className="h-5 w-5 text-indigo-600" />
             Form Elements
           </h2>
-          </div>
+          <button
+            type="button"
+            onClick={collapseElementsPanel}
+            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+            title="Collapse form elements"
+            aria-label="Collapse form elements"
+          >
+            <PanelLeftClose className="h-4 w-4" />
+          </button>
+        </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-8">
           {fieldTypes.map(group => (
             <div key={group.group}>
@@ -905,6 +932,7 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                 </div>
             </div>
           ))}
+        </div>
         </div>
       </div>
 
@@ -992,11 +1020,27 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                   </div>
 
       {/* 3. Right Sidebar: Properties */}
-      <div className="w-full xl:w-80 bg-white border-t xl:border-t-0 xl:border-l border-slate-200 flex flex-col z-20 shadow-xl shadow-slate-200/50 max-h-[42vh] xl:max-h-none">
-        <div className="p-5 border-b border-slate-100">
-          <h2 className="text-sm font-bold text-slate-800 uppercase tracking-widest">
+      <div
+        className={`flex-shrink-0 overflow-hidden transition-[width,max-height,opacity] duration-300 ease-in-out ${
+          propertiesPanelOpen
+            ? 'w-full xl:w-80 max-h-[42vh] xl:max-h-none opacity-100'
+            : 'w-0 max-h-0 xl:max-h-none opacity-0 pointer-events-none'
+        }`}
+      >
+        <div className="flex h-full w-full xl:w-80 flex-col border-t border-slate-200 bg-white shadow-xl shadow-slate-200/50 xl:border-l xl:border-t-0">
+        <div className="flex items-center justify-between border-b border-slate-100 p-5">
+          <h2 className="text-sm font-bold uppercase tracking-widest text-slate-800">
             Field Properties
           </h2>
+          <button
+            type="button"
+            onClick={collapsePropertiesPanel}
+            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+            title="Collapse field properties"
+            aria-label="Collapse field properties"
+          >
+            <PanelRightClose className="h-4 w-4" />
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
@@ -1082,6 +1126,7 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
               <p className="text-xs text-slate-400 mt-1 max-w-[180px]">Click on a form field in the canvas to edit its properties here.</p>
             </div>
           )}
+        </div>
         </div>
       </div>
 

@@ -241,9 +241,21 @@ export const FormSubmissionPage: React.FC = () => {
 
         const { data: programRow } = await supabase
           .from('programs')
-          .select('application_mode, require_github_auth, kyc_enabled')
+          .select('application_mode, require_github_auth, kyc_enabled, active_form_id, status')
           .eq('id', form.program_id)
           .maybeSingle();
+
+        if (programRow?.active_form_id && programRow.active_form_id !== currentFormId) {
+          setIsError('This form is not the active submission form for this program.');
+          setIsLoading(false);
+          return;
+        }
+
+        if (programRow?.status && programRow.status !== 'active') {
+          setIsError('Submissions are not yet open. This program is not live.');
+          setIsLoading(false);
+          return;
+        }
 
         const mode = (programRow?.application_mode as 'standard' | 'hackathon') || 'standard';
         const githubRequired = programRow?.require_github_auth ?? mode === 'hackathon';

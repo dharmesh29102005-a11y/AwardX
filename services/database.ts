@@ -635,6 +635,7 @@ class DatabaseService {
       requireGithubAuth: program.require_github_auth ?? false,
       visibility: program.visibility ? (program.visibility.charAt(0).toUpperCase() + program.visibility.slice(1)) as 'Public' | 'Private' : 'Public',
       timezone: program.timezone || 'UTC',
+      activeFormId: program.active_form_id ?? null,
     };
   }
 
@@ -876,29 +877,49 @@ class DatabaseService {
     });
   }
 
-  // Categories
+  // Categories (via backend API — avoids client RLS failures on direct inserts)
   async getCategories(programId: string): Promise<Category[]> {
-    const { data, error } = await supabasePrograms.getById(programId);
-    if (error || !data?.categories) return [];
+    try {
+      const response = await fetchBackendJson<{ data: any[] }>(
+        `/api/programs/${encodeURIComponent(programId)}/categories`,
+        { requireAuth: true, errorPrefix: 'Categories API' },
+      );
 
-    return (data.categories || []).map((cat: any) => ({
-      id: cat.id,
-      title: cat.title,
-      programId: cat.program_id,
-      parentId: cat.parent_id,
-      entriesCount: cat.entries_count || 0,
-    }));
+      return (response.data || []).map((cat: any) => ({
+        id: cat.id,
+        title: cat.title,
+        programId: cat.program_id,
+        parentId: cat.parent_id,
+        entriesCount: cat.entries_count || 0,
+      }));
+    } catch (error) {
+      console.error('Failed to load categories:', error);
+      return [];
+    }
   }
 
-  async deleteCategory(categoryId: string): Promise<void> {
-    if (!supabase) throw new Error('Supabase not configured');
+  async deleteCategory(categoryId: string, programId?: string): Promise<void> {
+    if (!programId) {
+      if (!supabase) throw new Error('Supabase not configured');
+      const { data: row, error: lookupError } = await supabase
+        .from('categories')
+        .select('program_id')
+        .eq('id', categoryId)
+        .maybeSingle();
+      if (lookupError || !row?.program_id) {
+        throw new Error(lookupError?.message || 'Category not found');
+      }
+      programId = row.program_id;
+    }
 
-    const { error } = await supabase
-      .from('categories')
-      .delete()
-      .eq('id', categoryId);
-
-    if (error) throw new Error(error.message || 'Failed to delete category');
+    await fetchBackendJson<{ ok: boolean }>(
+      `/api/programs/${encodeURIComponent(programId)}/categories/${encodeURIComponent(categoryId)}`,
+      {
+        method: 'DELETE',
+        requireAuth: true,
+        errorPrefix: 'Categories API',
+      },
+    );
 
     await this.safeAuditLog({
       action: 'Deleted category',
@@ -906,24 +927,26 @@ class DatabaseService {
       resourceType: 'category',
       resourceId: categoryId,
       details: `Category ${categoryId} deleted`,
-      metadata: { categoryId },
+      metadata: { categoryId, programId },
     });
   }
 
   async addCategory(category: Omit<Category, 'id' | 'entriesCount'>): Promise<Category> {
-    if (!supabase) throw new Error('Supabase not configured');
+    const response = await fetchBackendJson<{ data: any }>(
+      `/api/programs/${encodeURIComponent(category.programId)}/categories`,
+      {
+        method: 'POST',
+        requireAuth: true,
+        errorPrefix: 'Categories API',
+        body: {
+          title: category.title,
+          parent_id: category.parentId || null,
+        },
+      },
+    );
 
-    const { data, error } = await supabase
-      .from('categories')
-      .insert({
-        program_id: category.programId,
-        parent_id: category.parentId || null,
-        title: category.title,
-      })
-      .select()
-      .single();
-
-    if (error || !data) throw new Error(error?.message || 'Failed to create category');
+    const data = response.data;
+    if (!data) throw new Error('Failed to create category');
 
     const created = {
       id: data.id,
@@ -1018,12 +1041,13 @@ class DatabaseService {
 
   // Submissions
   async getSubmissions(programId?: string): Promise<Submission[]> {
-    const filters = programId ? { programId } : undefined;
-    const { data, error } = await submissions.getAll(filters);
-
-    if (error || !data) return [];
-
-    return data.map((s: any) => this.mapSubmission(s));
+    if (!programId) return [];
+    const result = await this.getSubmissionsPaginated({
+      programId,
+      page: 1,
+      pageSize: 1000,
+    });
+    return result.items;
   }
 
   async getSubmissionsPaginated(options?: {
@@ -1031,69 +1055,50 @@ class DatabaseService {
     page?: number;
     pageSize?: number;
     search?: string;
+    formId?: string | null;
   }): Promise<PaginatedResult<Submission>> {
-    if (!supabase) {
-      return { items: [], total: 0, page: 1, pageSize: 20, hasMore: false };
-    }
-
     const page = Math.max(1, options?.page || 1);
     const pageSize = Math.max(1, Math.min(100, options?.pageSize || 20));
-    const offset = (page - 1) * pageSize;
 
-    const orgId = await getCurrentOrgId();
-    if (!orgId) {
+    if (!options?.programId) {
       return { items: [], total: 0, page, pageSize, hasMore: false };
     }
 
-    const { data: orgPrograms } = await supabase
-      .from('programs')
-      .select('id')
-      .eq('organization_id', orgId);
-
-    const programIds = (orgPrograms || []).map((p: any) => p.id);
-    if (programIds.length === 0) {
-      return { items: [], total: 0, page, pageSize, hasMore: false };
-    }
-
-    let query = supabase
-      .from('submissions')
-      .select(
-        `
-        *,
-        categories(title),
-        submission_judges(judge_id)
-      `,
-        { count: 'exact' }
-      )
-      .in('program_id', programIds)
-      .order('submitted_at', { ascending: false });
-
-    if (options?.programId) {
-      if (!programIds.includes(options.programId)) {
-        return { items: [], total: 0, page, pageSize, hasMore: false };
-      }
-      query = query.eq('program_id', options.programId);
-    }
-
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+    });
     const search = options?.search?.trim();
-    if (search) {
-      query = query.or(`title.ilike.%${search}%,applicant_name.ilike.%${search}%,applicant_email.ilike.%${search}%`);
-    }
+    if (search) params.set('search', search);
+    if (options?.formId) params.set('formId', options.formId);
 
-    const { data, error, count } = await query.range(offset, offset + pageSize - 1);
-    if (error || !data) {
-      return { items: [], total: 0, page, pageSize, hasMore: false };
-    }
+    const response = await fetchBackendJson<{
+      data: any[];
+      total: number;
+      page: number;
+      pageSize: number;
+      hasMore?: boolean;
+    }>(
+      `/api/programs/${encodeURIComponent(options.programId)}/submissions?${params.toString()}`,
+      { requireAuth: true, errorPrefix: 'Submissions API' },
+    );
 
-    const items = data.map((s: any) => this.mapSubmission(s));
-    const total = count || 0;
+    const items = (response.data || []).map((s: any) =>
+      this.mapSubmission({
+        ...s,
+        categories: s.category_title ? { title: s.category_title } : s.categories,
+        submission_judges: s.submission_judges || [],
+        submission_data: s.submission_data ?? s.submissionData,
+      }),
+    );
+    const total = response.total || 0;
 
     return {
       items,
       total,
-      page,
-      pageSize,
-      hasMore: offset + items.length < total,
+      page: response.page || page,
+      pageSize: response.pageSize || pageSize,
+      hasMore: response.hasMore ?? page * pageSize < total,
     };
   }
 
@@ -1196,99 +1201,114 @@ class DatabaseService {
     return statusMap[status?.toLowerCase()] || 'Pending';
   }
 
-  async addSubmission(submission: Omit<Submission, 'id' | 'date' | 'score' | 'image' | 'assignedJudges'>): Promise<Submission> {
-    if (!supabase) throw new Error('Supabase not configured');
+  async addSubmission(
+    submission: Omit<Submission, 'id' | 'date' | 'score' | 'image' | 'assignedJudges'> & {
+      programId?: string;
+    },
+  ): Promise<Submission> {
+    const programId = submission.programId;
+    if (!programId) {
+      throw new Error('programId is required to create a submission');
+    }
 
-    // Need to find program and category IDs
-    const programs = await this.getPrograms();
-    const program = programs[0];
-    if (!program) throw new Error('No programs found. Create a program first.');
+    const response = await fetchBackendJson<{ data: any }>(
+      `/api/programs/${encodeURIComponent(programId)}/submissions`,
+      {
+        method: 'POST',
+        requireAuth: true,
+        errorPrefix: 'Submissions API',
+        body: {
+          title: submission.title,
+          applicant: submission.applicant,
+          category: submission.category,
+          status: submission.status,
+        },
+      },
+    );
 
-    const categories = await this.getCategories(program.id);
-    const category = categories.find(c => c.title === submission.category);
-
-    const { data, error } = await supabase
-      .from('submissions')
-      .insert({
-        program_id: program.id,
-        category_id: category?.id || null,
-        title: submission.title,
-        description: '',
-        status: 'pending',
-        applicant_name: submission.applicant,
-      })
-      .select()
-      .single();
-
-    if (error || !data) throw new Error(error?.message || 'Failed to create submission');
+    const data = response.data;
+    if (!data) throw new Error('Failed to create submission');
 
     const created: Submission = {
       id: data.id,
       title: data.title,
-      applicant: data.applicant_name || 'Unknown',
-      category: category?.title || 'Uncategorized',
-      status: 'Pending',
-      score: null,
-      date: new Date().toISOString().split('T')[0],
-      image: `https://source.unsplash.com/random/50x50?${data.id}`,
+      applicant: data.applicant_name || submission.applicant || 'Unknown',
+      category: data.category_title || submission.category || 'Uncategorized',
+      status: this.mapSubmissionStatus(data.status) as Submission['status'],
+      score: data.average_score ? Math.round(data.average_score) : null,
+      date: data.submitted_at
+        ? new Date(data.submitted_at).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0],
+      image: data.cover_image_url || `https://picsum.photos/seed/${encodeURIComponent(data.id)}/50/50`,
       assignedJudges: [],
     };
+
     await this.safeAuditLog({
       action: 'Created submission',
       actionType: 'create',
       resourceType: 'submission',
       resourceId: created.id,
       details: created.title,
-      metadata: { title: created.title, programId: program.id, category: created.category, applicant: created.applicant },
+      metadata: {
+        title: created.title,
+        programId,
+        category: created.category,
+        applicant: created.applicant,
+      },
     });
     return created;
   }
 
-  async bulkUpdateSubmissions(ids: string[], updates: Partial<Submission>) {
-    if (!supabase) throw new Error('Supabase not configured');
-
-    const statusMap: Record<string, string> = {
-      'Pending': 'pending',
-      'Under Review': 'under_review',
-      'Shortlisted': 'shortlisted',
-      'Accepted': 'accepted',
-      'Rejected': 'rejected',
-    };
-
-    const supabaseUpdates: any = {};
-    if (updates.status) {
-      supabaseUpdates.status = statusMap[updates.status] || updates.status.toLowerCase();
+  async bulkUpdateSubmissions(
+    ids: string[],
+    updates: Partial<Submission>,
+    programId?: string,
+  ) {
+    if (!updates.status) return;
+    if (!programId) {
+      throw new Error('programId is required to update submissions');
     }
 
-    const { error } = await supabase
-      .from('submissions')
-      .update(supabaseUpdates)
-      .in('id', ids);
+    await fetchBackendJson<{ ok: boolean }>(
+      `/api/programs/${encodeURIComponent(programId)}/submissions/bulk`,
+      {
+        method: 'PATCH',
+        requireAuth: true,
+        errorPrefix: 'Submissions API',
+        body: { ids, status: updates.status },
+      },
+    );
 
-    if (error) throw new Error(error.message);
-
-    if (updates.status) {
-      await this.safeAuditLog({
-        action: 'Updated submission status (bulk)',
-        actionType: 'update',
-        resourceType: 'submission',
-        details: `${ids.length} submissions -> ${updates.status}`,
-        metadata: { ids, status: updates.status },
-      });
-    }
+    await this.safeAuditLog({
+      action: 'Updated submission status (bulk)',
+      actionType: 'update',
+      resourceType: 'submission',
+      details: `${ids.length} submissions -> ${updates.status}`,
+      metadata: { ids, status: updates.status, programId },
+    });
   }
 
-  async deleteSubmissions(ids: string[]) {
-    for (const id of ids) {
-      const { error } = await submissions.delete(id);
-      if (error) throw new Error(error.message || 'Failed to delete submission');
+  async deleteSubmissions(ids: string[], programId?: string) {
+    if (!programId) {
+      throw new Error('programId is required to delete submissions');
     }
+
+    await fetchBackendJson<{ ok: boolean }>(
+      `/api/programs/${encodeURIComponent(programId)}/submissions`,
+      {
+        method: 'DELETE',
+        requireAuth: true,
+        errorPrefix: 'Submissions API',
+        body: { ids },
+      },
+    );
+
     await this.safeAuditLog({
       action: 'Deleted submissions (bulk)',
       actionType: 'delete',
       resourceType: 'submission',
       details: `${ids.length} submissions`,
-      metadata: { ids },
+      metadata: { ids, programId },
     });
   }
 
@@ -2711,22 +2731,28 @@ class DatabaseService {
   }
 
   async getActiveFormForProgram(programId: string): Promise<string | null> {
-    if (!supabase) return null;
-    const { data } = await supabase
-      .from('programs')
-      .select('active_form_id')
-      .eq('id', programId)
-      .single();
-    return data?.active_form_id || null;
+    try {
+      const response = await fetchBackendJson<{ data: { active_form_id: string | null } }>(
+        `/api/schedule-rounds/${encodeURIComponent(programId)}/active-form`,
+        { requireAuth: true, errorPrefix: 'Active form API' },
+      );
+      return response.data?.active_form_id ?? null;
+    } catch (error) {
+      console.error('Failed to load active form:', error);
+      return null;
+    }
   }
 
   async setActiveFormForProgram(programId: string, formId: string | null) {
-    if (!supabase) throw new Error('Supabase not configured');
-    const { error } = await supabase
-      .from('programs')
-      .update({ active_form_id: formId })
-      .eq('id', programId);
-    if (error) throw new Error(error.message || 'Failed to set active form');
+    await fetchBackendJson<{ ok: boolean }>(
+      `/api/schedule-rounds/${encodeURIComponent(programId)}/active-form`,
+      {
+        method: 'PUT',
+        requireAuth: true,
+        errorPrefix: 'Active form API',
+        body: { form_id: formId },
+      },
+    );
     await this.safeAuditLog({
       action: formId ? 'Set active form' : 'Cleared active form',
       actionType: 'update',

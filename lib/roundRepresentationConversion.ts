@@ -27,6 +27,18 @@ export function writeStoredRepresentation(programId: string, mode: ScheduleRepre
   window.localStorage.setItem(representationStorageKey(programId), mode);
 }
 
+export function readScheduleRepresentation(programId: string): ScheduleRepresentation {
+  return readStoredRepresentation(programId) ?? 'tiles';
+}
+
+export function toggleScheduleRepresentation(mode: ScheduleRepresentation): ScheduleRepresentation {
+  return mode === 'tiles' ? 'workflow' : 'tiles';
+}
+
+export function holdHintForScheduleMode(mode: ScheduleRepresentation): string {
+  return mode === 'tiles' ? 'Hold to view flow' : 'Hold to view tiles';
+}
+
 export function hasCustomWorkflowEdges(orderedRounds: Round[], edges: RoundEdge[]): boolean {
   if (edges.length === 0) return false;
 

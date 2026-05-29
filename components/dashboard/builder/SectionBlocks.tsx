@@ -5,6 +5,7 @@ import {
     History, Zap, MapPin, Search, ArrowRight, Clock, Globe, TrendingUp, ArrowDown, Heart, Eye as EyeIcon, MessageSquare
 } from 'lucide-react';
 import { db } from '../../../services/database';
+import { resolveMediaPublicUrl } from '../../../services/supabase';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Submission } from '../../../services/models';
 
@@ -608,13 +609,16 @@ export const SectionPreview: React.FC<{ section: any; onNavigate?: (page: string
                 </nav>
             );
 
-        case 'hero':
+        case 'hero': {
+            const heroBackground =
+                resolveMediaPublicUrl(content?.backgroundImage) ||
+                'https://images.unsplash.com/photo-1635070041078-e363dbe005cb?auto=format&fit=crop&q=80&w=2070';
             return (
                 <div className={`relative w-full overflow-hidden ${settings?.height === 'full' ? 'min-h-[85vh]' : 'min-h-[600px]'} bg-[#0a0a0a] text-white group flex flex-col justify-center`}>
                     {/* Background & Overlay */}
                     <div className="absolute inset-0 z-0">
                         <img
-                            src={content?.backgroundImage || "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?auto=format&fit=crop&q=80&w=2070"}
+                            src={heroBackground}
                             alt="Hero"
                             className="w-full h-full object-cover opacity-60 mix-blend-overlay transition-transform duration-1000 transform group-hover:scale-105"
                         />
@@ -670,6 +674,7 @@ export const SectionPreview: React.FC<{ section: any; onNavigate?: (page: string
                     </div>
                 </div>
             );
+        }
 
         case 'about':
             return (

@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { FormField, FormPage, FormTheme } from './FormBuilder';
 import { FormPreview } from './FormPreview';
 import { db } from '../../services/database';
 import { Program } from '../../services/models';
-import { FileText, CheckCircle2 } from 'lucide-react';
+import { queryKeys } from '../../services/queryKeys';
+import { FileText, CheckCircle2, Star } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface FormBuilderWithSelectorProps {
   activeEvent: Program | null;
@@ -11,8 +14,10 @@ interface FormBuilderWithSelectorProps {
 }
 
 export const FormBuilderWithSelector: React.FC<FormBuilderWithSelectorProps> = ({ activeEvent, onFormSelect }) => {
+  const queryClient = useQueryClient();
   const [savedForms, setSavedForms] = useState<any[]>([]);
   const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
+  const [activeFormId, setActiveFormId] = useState<string | null>(null);
   const [currentFormFields, setCurrentFormFields] = useState<FormField[]>([]);
   const [currentPages, setCurrentPages] = useState<FormPage[]>([]);
   const [currentTheme, setCurrentTheme] = useState<FormTheme | undefined>(undefined);
@@ -24,12 +29,13 @@ export const FormBuilderWithSelector: React.FC<FormBuilderWithSelectorProps> = (
 
   useEffect(() => {
     if (activeEvent) {
-      loadSavedForms();
-      // Load previously selected form
-      const savedFormId = localStorage.getItem(`selected_form_${activeEvent.id}`);
-      if (savedFormId) {
-        loadForm(savedFormId);
-      }
+      void loadSavedForms();
+      void db.getActiveFormForProgram(activeEvent.id).then((formId) => {
+        setActiveFormId(formId);
+        if (formId) {
+          void loadForm(formId);
+        }
+      });
     }
   }, [activeEvent]);
 
@@ -78,11 +84,20 @@ export const FormBuilderWithSelector: React.FC<FormBuilderWithSelectorProps> = (
     setSettingsMessage(null);
     setSelectedFormId(formId);
     if (onFormSelect) onFormSelect(formId);
-    if (activeEvent) localStorage.setItem(`selected_form_${activeEvent.id}`, formId);
   };
 
-  const handleFormSelect = (formId: string) => {
-    void loadForm(formId);
+  const handleFormSelect = async (formId: string) => {
+    if (!activeEvent) return;
+    try {
+      await db.setActiveFormForProgram(activeEvent.id, formId);
+      setActiveFormId(formId);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.programForms.active(activeEvent.id) });
+      toast.success('Submission form selected for this program.');
+      void loadForm(formId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to select form';
+      toast.error(message);
+    }
   };
 
   const handleSaveFormSettings = async () => {
@@ -149,7 +164,7 @@ export const FormBuilderWithSelector: React.FC<FormBuilderWithSelectorProps> = (
               return (
                 <div
                   key={form.id}
-                  onClick={() => handleFormSelect(form.id)}
+                  onClick={() => void handleFormSelect(form.id)}
                   className={`p-4 rounded-lg border cursor-pointer transition-all ${isSelected
                     ? 'border-indigo-500 bg-indigo-50 shadow-sm'
                     : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'
@@ -158,7 +173,12 @@ export const FormBuilderWithSelector: React.FC<FormBuilderWithSelectorProps> = (
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <h4 className="text-sm font-semibold text-slate-900">{form.name}</h4>
+                        <h4 className="text-sm font-semibold text-slate-900">{form.title}</h4>
+                        {activeFormId === form.id && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-emerald-700">
+                            <Star className="h-3 w-3" /> Active
+                          </span>
+                        )}
                         {isSelected && (
                           <CheckCircle2 className="w-4 h-4 text-indigo-600 flex-shrink-0" />
                         )}

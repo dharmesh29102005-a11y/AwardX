@@ -105,7 +105,24 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
                 setProgramSlug(programRes.data?.slug || null);
                 setHeroSection(hero);
                 setAboutSection(about);
-                setCoverImage(hero.content?.backgroundImage || programRes.data?.cover_image_url || '');
+                const rawCover = hero.content?.backgroundImage || programRes.data?.cover_image_url || '';
+                let resolvedCover = rawCover;
+                if (rawCover && !/^https?:\/\//i.test(rawCover)) {
+                    try {
+                        const assets = await getProgramMediaAssets(programId);
+                        const match = assets.find(
+                            (asset) =>
+                                asset.url === rawCover ||
+                                asset.name === rawCover ||
+                                asset.url?.includes(rawCover) ||
+                                asset.name?.includes(rawCover),
+                        );
+                        resolvedCover = match?.url || rawCover;
+                    } catch {
+                        resolvedCover = rawCover;
+                    }
+                }
+                setCoverImage(resolvedCover);
                 setTagline(hero.content?.subtitle || '');
                 setPrimaryCta(hero.content?.primaryCtaText || 'Nominate Now');
                 setAboutLead(about.content?.lead || '');

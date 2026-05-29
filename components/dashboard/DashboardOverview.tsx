@@ -7,6 +7,7 @@ import { db as databaseService } from '../../services/database';
 import { SkeletonLoader } from '../SkeletonLoader';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { queryKeys } from '../../services/queryKeys';
 
 interface DashboardOverviewProps {
   activeEvent?: Program | null;
@@ -49,16 +50,17 @@ const FormSelectorSection: React.FC<{ activeEvent: Program | null; onNavigate?: 
 
   const attachMutation = useMutation({
     mutationFn: async (formId: string) => {
-      await databaseService.updateProgram({ ...activeEvent!, active_form_id: formId } as any);
+      await databaseService.setActiveFormForProgram(activeEvent!.id, formId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['forms-overview', activeEvent?.id ?? ''] });
-      toast.success('Form attached to this program.');
+      queryClient.invalidateQueries({ queryKey: queryKeys.programForms.active(activeEvent?.id ?? '') });
+      toast.success('Submission form selected for this program.');
     },
-    onError: () => toast.error('Failed to attach form.'),
+    onError: () => toast.error('Failed to select submission form.'),
   });
 
-  const activeFormId = (activeEvent as any)?.active_form_id ?? null;
+  const activeFormId = activeEvent?.activeFormId ?? null;
   const activeForm   = forms.find((f: any) => f.id === activeFormId);
 
   if (!activeEvent) return null;

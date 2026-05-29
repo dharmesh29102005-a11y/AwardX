@@ -42,6 +42,7 @@ export interface Program {
   kycProvider?: string;
   applicationMode?: 'standard' | 'hackathon';
   requireGithubAuth?: boolean;
+  activeFormId?: string | null;
 }
 
 export interface Category {

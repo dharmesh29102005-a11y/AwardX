@@ -7,6 +7,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { resolveMediaPublicUrl } from '../../services/supabase';
 import {
     Calendar, Clock, Trophy, ChevronRight, ArrowRight,
     ChevronDown, CheckCircle2, Star, Users, Zap, Award,
@@ -352,7 +353,9 @@ function HeroSection({ section, payload, nominateUrl, nominateButtonText }: Sect
 
     const deadline = payload.schedule?.deadline || payload.program.deadline;
     const countdown = useCountdown(deadline);
-    const coverImage = content.backgroundImage || payload.program.cover_image_url;
+    const coverImage =
+        resolveMediaPublicUrl(content.backgroundImage || payload.program.cover_image_url) ||
+        'https://images.unsplash.com/photo-1635070041078-e363dbe005cb?auto=format&fit=crop&q=80&w=2070';
     const tagline = content.subtitle;
     const hasLink = nominateUrl && nominateUrl !== '#';
 

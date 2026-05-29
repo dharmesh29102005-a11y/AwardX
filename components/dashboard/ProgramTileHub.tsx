@@ -9,6 +9,7 @@ import { Drawer } from '../Drawer';
 import { Program, programStatusLabel } from '../../services/models';
 import { db } from '../../services/database';
 import { queryKeys } from '../../services/queryKeys';
+import { getProgramFormSetupState } from '../../lib/programFormSetup';
 
 // Lazy-loaded view components (re-used from existing dashboard views)
 import { DashboardOverview } from './DashboardOverview';
@@ -201,6 +202,13 @@ const useTileStats = (program: Program | null) => {
     staleTime: 30_000,
   });
 
+  const { data: activeFormId = null } = useQuery({
+    queryKey: queryKeys.programForms.active(program?.id ?? ''),
+    queryFn: () => db.getActiveFormForProgram(program!.id),
+    enabled,
+    staleTime: 30_000,
+  });
+
   return {
     entries: submissions.length,
     judges: judges.length,
@@ -208,6 +216,7 @@ const useTileStats = (program: Program | null) => {
     members: members.length,
     categories: categories.length,
     forms,
+    activeFormId,
   };
 };
 
@@ -215,6 +224,8 @@ const useTileStats = (program: Program | null) => {
 export const ProgramTileHub: React.FC<ProgramTileHubProps> = ({ activeEvent, onNavigate }) => {
   const [activeTile, setActiveTile] = useState<TileId | null>(null);
   const stats = useTileStats(activeEvent);
+
+  const formSetup = getProgramFormSetupState(stats.forms, stats.activeFormId);
 
   const readinessChecks: ReadinessCheck[] = [
     {
@@ -225,11 +236,9 @@ export const ProgramTileHub: React.FC<ProgramTileHubProps> = ({ activeEvent, onN
     },
     {
       id: 'forms',
-      label: 'Submission form is published',
-      level: stats.forms.some((form: any) => !!form.is_active) ? 'ok' : 'error',
-      detail: stats.forms.some((form: any) => !!form.is_active)
-        ? 'At least one form is published and ready for entrants.'
-        : 'Publish at least one form so entrants can submit.',
+      label: 'Submission form selected & published',
+      level: formSetup.status === 'ready' ? 'ok' : 'error',
+      detail: formSetup.message,
     },
     {
       id: 'rounds',

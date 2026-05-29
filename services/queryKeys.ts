@@ -8,8 +8,11 @@ export const queryKeys = {
   },
   submissions: {
     all: (programId: string) => ['submissions', programId] as const,
-    paginated: (programId: string, page: number, search: string) =>
-      ['submissions', programId, page, search] as const,
+    paginated: (programId: string, page: number, search: string, formId = '') =>
+      ['submissions', programId, page, search, formId] as const,
+  },
+  programForms: {
+    active: (programId: string) => ['active-form', programId] as const,
   },
   judges: {
     all: (programId: string) => ['judges', programId] as const,

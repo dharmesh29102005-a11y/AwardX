@@ -47,7 +47,7 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({ is
         const map = new Map<string, { label: string; type: string }>();
         if (formFieldsData) {
             for (const field of formFieldsData) {
-                map.set(field.id, { label: field.label || field.field_key || field.id, type: field.field_type || 'text' });
+                map.set(field.id, { label: field.label || field.field_key || field.id, type: field.type || field.field_type || 'text' });
             }
         }
         return map;
