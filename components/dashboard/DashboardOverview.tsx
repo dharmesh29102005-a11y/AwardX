@@ -286,7 +286,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEven
         ) : (
           <>
             <StatCard
-              title={activeEvent?.type === 'Grant' ? 'Applications' : 'Total Submissions'}
+              title={activeEvent?.type === 'Grants & Funding' || activeEvent?.type === 'Grant' ? 'Applications' : 'Total Submissions'}
               value={stats.totalSubmissions}
               change="+Demo"
               isPositive={true}
@@ -346,7 +346,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEven
               <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="font-bold text-slate-900 text-lg">
-                    {activeEvent?.type === 'Grant' ? 'Application Volume' : 'Submission Trends'}
+                    {activeEvent?.type === 'Grants & Funding' || activeEvent?.type === 'Grant' ? 'Application Volume' : 'Submission Trends'}
                   </h3>
                   <select className="bg-slate-50 border border-slate-200 rounded-lg text-xs px-3 py-1.5 text-slate-600 outline-none">
                     <option>Last 7 Days</option>

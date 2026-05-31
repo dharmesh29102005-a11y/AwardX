@@ -14,6 +14,14 @@ export interface PaymentConfig {
 }
 
 export type EventType =
+  | 'Accelerator & Incubator Programs'
+  | 'Grants & Funding'
+  | 'Academic Admissions'
+  | 'Abstracts & Journals'
+  | 'Personnel & Fellowships'
+  | 'Creative Contests'
+  | 'Other'
+  // Legacy types retained for existing programs
   | 'Award'
   | 'Competition'
   | 'Grant'
@@ -21,8 +29,7 @@ export type EventType =
   | 'Exhibition'
   | 'Residency'
   | 'Fair'
-  | 'Commission'
-  | 'Other';
+  | 'Commission';
 
 export interface Organization {
   id: string;

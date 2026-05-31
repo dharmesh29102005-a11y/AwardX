@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
-   Trophy, Gavel, HandCoins, Building2, Palette, MapPin,
-   Store, Briefcase, Sparkles, Calendar, ArrowRight,
-   LogOut, Bell, Search, RefreshCw, Plus, Pencil, Trash2, Layers, CheckCircle2
+   Trophy, HandCoins, Building2, Sparkles, Calendar, ArrowRight,
+   LogOut, Bell, Search, RefreshCw, Plus, Pencil, Trash2, Layers, CheckCircle2,
+   Rocket, GraduationCap, BookOpen, UserCheck, Palette
 } from 'lucide-react';
 import { Program, EventType, Organization } from '../../services/models';
 import { auth } from '../../services/supabase';
@@ -50,7 +50,7 @@ const SupabaseStatCard: React.FC<{ label: string; value: number; icon: React.Ele
    </div>
 );
 
-const EventTypeCard = ({ type, icon: Icon, description, onClick }: any) => (
+const EventTypeCard = ({ type, label, icon: Icon, description, onClick }: any) => (
    <motion.button
       whileHover={{ y: -2 }}
       onClick={onClick}
@@ -59,7 +59,7 @@ const EventTypeCard = ({ type, icon: Icon, description, onClick }: any) => (
       <div className="w-11 h-11 rounded-lg bg-slate-50 text-slate-600 flex items-center justify-center mb-4 group-hover:bg-emerald-50 group-hover:text-emerald-700 transition-colors border border-slate-200 group-hover:border-emerald-200">
          <Icon className="w-6 h-6" />
       </div>
-      <h3 className="text-base font-semibold text-slate-900 mb-1.5">{type}</h3>
+      <h3 className="text-base font-semibold text-slate-900 mb-1.5">{label || type}</h3>
       <p className="text-sm text-slate-500 leading-relaxed">{description}</p>
    </motion.button>
 );
@@ -124,6 +124,16 @@ const ExistingEventCard: React.FC<{
    </motion.div>
 );
 
+const WORKFLOW_HINTS: Partial<Record<EventType, string>> = {
+   'Accelerator & Incubator Programs': 'Y Combinator-style cohort programs with collaborative founder workspaces.',
+   'Grants & Funding': 'NIH, SSHRC, and ERC-style multi-stage grant review pipelines.',
+   'Academic Admissions': 'University admissions with blind references and committee review.',
+   'Abstracts & Journals': 'Conference and journal workflows with double-blind peer review.',
+   'Personnel & Fellowships': 'Nomination-driven fellowship programs with executive review.',
+   'Creative Contests': 'Design and media contests with jury scoring and public voting.',
+   'Other': 'industry best practices',
+};
+
 export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
    activeOrganization,
    onSelectEvent,
@@ -177,37 +187,43 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
       };
    }, [events]);
 
-   // Grouped Event Types
-   const eventGroups = [
+   const eventTypes: Array<{ type: EventType; label?: string; icon: React.ElementType; description: string }> = [
       {
-         title: "Recognition & Excellence",
-         items: [
-            { type: 'Award', icon: Trophy, description: 'Recognize winners based on final selection.' },
-            { type: 'Competition', icon: Gavel, description: 'Multi-round judging and competitive ranking.' },
-         ]
+         type: 'Accelerator & Incubator Programs',
+         icon: Rocket,
+         description: 'Multi-stage startup evaluation with entry collaboration for co-founder teams.',
       },
       {
-         title: "Funding & Opportunities",
-         items: [
-            { type: 'Grant', icon: HandCoins, description: 'Funding applications and proposal evaluation.' },
-            { type: 'Residency', icon: MapPin, description: 'Select people for residencies or fellowships.' },
-            { type: 'Commission', icon: Briefcase, description: 'Submit proposals to be hired or commissioned.' },
-         ]
+         type: 'Grants & Funding',
+         icon: HandCoins,
+         description: 'Grant applications with multi-stage review, compliance, and COI management.',
       },
       {
-         title: "Showcase & Events",
-         items: [
-            { type: 'Exhibition', icon: Palette, description: 'Collect work to display or showcase.' },
-            { type: 'Fair', icon: Store, description: 'Applications for a fair or trade show.' },
-            { type: 'Internal Event', icon: Building2, description: 'Private/internal organizational programs.' },
-         ]
+         type: 'Academic Admissions',
+         icon: GraduationCap,
+         description: 'Student admissions with blind references, academic records, and committee review.',
       },
       {
-         title: "Custom",
-         items: [
-            { type: 'Other', icon: Sparkles, description: 'Build a custom process from scratch.' },
-         ]
-      }
+         type: 'Abstracts & Journals',
+         icon: BookOpen,
+         description: 'Abstract and manuscript submission with peer review and editorial decisions.',
+      },
+      {
+         type: 'Personnel & Fellowships',
+         icon: UserCheck,
+         description: 'Nomination and fellowship selection with endorsement and executive review.',
+      },
+      {
+         type: 'Creative Contests',
+         icon: Palette,
+         description: 'Video, photography, and design contests with jury scoring and public voting.',
+      },
+      {
+         type: 'Other',
+         label: 'Custom',
+         icon: Sparkles,
+         description: 'Build a custom process from scratch.',
+      },
    ];
 
    // Optimized load programs function
@@ -586,41 +602,32 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
                )}
             </section>
 
-            {/* Create New Event Section - Grouped */}
+            {/* Create New Event Section */}
             <section ref={createSectionRef} className="scroll-mt-24">
                <div className="text-center mb-10">
                   <h2 className="text-2xl font-semibold text-slate-900 mb-3">Create New Event</h2>
                   <p className="text-slate-500 max-w-2xl mx-auto text-lg">
-                     Select a strategic category to initialize your event workspace with pre-configured workflows.
+                     Select a program template to initialize your workspace with pre-configured workflows and judging rounds.
                   </p>
                </div>
 
-               <div className="space-y-9">
-                  {eventGroups.map((group, idx) => (
-                     <div key={idx}>
-                        <div className="flex items-center gap-4 mb-5">
-                           <h3 className="text-xs font-semibold text-slate-700 uppercase tracking-widest bg-slate-100 px-3 py-1 rounded-md border border-slate-200">{group.title}</h3>
-                           <div className="h-px bg-slate-200 flex-1"></div>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                           {group.items.map((item) => (
-                              <EventTypeCard
-                                 key={item.type}
-                                 type={item.type}
-                                 icon={item.icon}
-                                 description={item.description}
-                                 onClick={() => handleTypeSelect(item.type as EventType)}
-                              />
-                           ))}
-                        </div>
-                     </div>
+               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {eventTypes.map((item) => (
+                     <EventTypeCard
+                        key={item.type}
+                        type={item.type}
+                        label={item.label}
+                        icon={item.icon}
+                        description={item.description}
+                        onClick={() => handleTypeSelect(item.type)}
+                     />
                   ))}
                </div>
             </section>
          </main>
 
          {/* Create Modal */}
-         <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={`Create New ${selectedType}`}>
+         <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={selectedType === 'Other' ? 'Create Custom Event' : `Create New ${selectedType}`}>
             <form onSubmit={handleCreate} className="space-y-4">
                <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1">Event Title</label>
@@ -658,7 +665,7 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
                <div className="bg-emerald-50 p-4 rounded-xl text-sm text-emerald-800 flex gap-3 items-start mt-4 border border-emerald-100">
                   <Sparkles className="w-5 h-5 shrink-0 mt-0.5 text-emerald-700" />
                   <p>
-                     AwardX will automatically configure the workspace for a <strong>{selectedType}</strong> workflow, including optimal judging rounds based on research from {selectedType === 'Award' ? 'A\' Design and iF Design' : selectedType === 'Grant' ? 'NIH and SSHRC' : selectedType === 'Residency' ? 'MacDowell and Yaddo' : 'industry best practices'}.
+                     AwardX will automatically configure the workspace for a <strong>{selectedType}</strong> workflow, including optimal judging rounds based on research from {selectedType ? WORKFLOW_HINTS[selectedType] || 'industry best practices' : 'industry best practices'}.
                   </p>
                </div>
                <div className="pt-6 flex justify-end gap-3">

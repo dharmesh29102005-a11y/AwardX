@@ -35,14 +35,29 @@ export interface TemplateConfig {
  */
 export function getTemplateConfig(eventType: EventType): TemplateConfig {
     switch (eventType) {
+        case 'Accelerator & Incubator Programs':
+            return getAcceleratorConfig();
+        case 'Grants & Funding':
+            return getGrantsFundingConfig();
+        case 'Academic Admissions':
+            return getAcademicAdmissionsConfig();
+        case 'Abstracts & Journals':
+            return getAbstractsJournalsConfig();
+        case 'Personnel & Fellowships':
+            return getPersonnelFellowshipsConfig();
+        case 'Creative Contests':
+            return getCreativeContestsConfig();
+        case 'Other':
+            return getGenericConfig();
+        // Legacy types
         case 'Award':
             return getAwardConfig();
         case 'Competition':
             return getCompetitionConfig();
         case 'Grant':
-            return getGrantConfig();
+            return getGrantsFundingConfig();
         case 'Residency':
-            return getResidencyConfig();
+            return getPersonnelFellowshipsConfig();
         case 'Commission':
             return getCommissionConfig();
         case 'Exhibition':
@@ -51,11 +66,460 @@ export function getTemplateConfig(eventType: EventType): TemplateConfig {
             return getFairConfig();
         case 'Internal Event':
             return getInternalEventConfig();
-        case 'Other':
-            return getGenericConfig();
         default:
             return getGenericConfig();
     }
+}
+
+/**
+ * Accelerator & Incubator Programs
+ * Team collaboration → idea pitch → validation → financials → expert review → demo day → graduation
+ */
+function getAcceleratorConfig(): TemplateConfig {
+    return {
+        eventType: 'Accelerator & Incubator Programs',
+        judgingConfig: {
+            minReviewersPerEntry: 3,
+            idealReviewersPerEntry: 5,
+            totalJuryPoolSize: 20,
+            blindReview: false,
+            scoreNormalization: true,
+            scoringScale: '1-10',
+        },
+        totalRounds: { min: 5, ideal: 8 },
+        rounds: [
+            {
+                title: 'Team Registration & Collaboration',
+                type: 'Submission',
+                description: 'Multi-founder registration and collaborative workspace for co-founders.',
+                startOffsetDays: -90,
+                durationDays: 30,
+            },
+            {
+                title: 'Idea Submission',
+                type: 'Submission',
+                description: 'Elevator pitch, problem statement, solution overview, and video pitch upload.',
+                startOffsetDays: -60,
+                durationDays: 30,
+            },
+            {
+                title: 'Initial Screening',
+                type: 'Judging',
+                description: 'Eligibility checks and first-pass evaluation of startup ideas.',
+                startOffsetDays: 0,
+                durationDays: 14,
+                reviewerCount: 3,
+            },
+            {
+                title: 'Business Validation',
+                type: 'Judging',
+                description: 'Business Model Canvas, market research, competitor analysis, and customer validation.',
+                startOffsetDays: 14,
+                durationDays: 21,
+                reviewerCount: 4,
+            },
+            {
+                title: 'Financial Assessment',
+                type: 'Judging',
+                description: 'Revenue model, financial forecasting, cash flow projections, and funding requirements.',
+                startOffsetDays: 35,
+                durationDays: 14,
+                reviewerCount: 3,
+            },
+            {
+                title: 'Expert Review & Due Diligence',
+                type: 'Judging',
+                description: 'Legal verification, founder background checks, IP and company registration validation.',
+                startOffsetDays: 49,
+                durationDays: 14,
+                reviewerCount: 5,
+            },
+            {
+                title: 'Incubation & Mentor Matching',
+                type: 'Judging',
+                description: 'Mentor assignment, milestone tracking, and incubation program progress.',
+                startOffsetDays: 63,
+                durationDays: 28,
+            },
+            {
+                title: 'Demo Day',
+                type: 'Judging',
+                description: 'Pitch presentations, live scoring, and investor connect sessions.',
+                startOffsetDays: 91,
+                durationDays: 7,
+                reviewerCount: 5,
+            },
+            {
+                title: 'Graduation',
+                type: 'Announcement',
+                description: 'Program completion, graduation readiness assessment, and cohort outcomes.',
+                startOffsetDays: 98,
+                durationDays: 1,
+            },
+        ],
+    };
+}
+
+/**
+ * Grants & Funding
+ * Application intake → screening → technical → financial → compliance → final approval
+ */
+function getGrantsFundingConfig(): TemplateConfig {
+    return {
+        eventType: 'Grants & Funding',
+        judgingConfig: {
+            minReviewersPerEntry: 3,
+            idealReviewersPerEntry: 5,
+            totalJuryPoolSize: 25,
+            blindReview: false,
+            scoreNormalization: true,
+            scoringScale: '1-10',
+        },
+        totalRounds: { min: 4, ideal: 6 },
+        rounds: [
+            {
+                title: 'Application Period',
+                type: 'Submission',
+                description: 'Grant applications with eligibility screening and conditional form logic.',
+                startOffsetDays: -120,
+                durationDays: 120,
+            },
+            {
+                title: 'Eligibility Screening',
+                type: 'Judging',
+                description: 'Initial screening with budget validation and eligibility-based routing.',
+                startOffsetDays: 0,
+                durationDays: 14,
+                reviewerCount: 3,
+            },
+            {
+                title: 'Technical Review',
+                type: 'Judging',
+                description: 'Technical merit assessment and impact scoring by assigned reviewers.',
+                startOffsetDays: 14,
+                durationDays: 21,
+                reviewerCount: 4,
+            },
+            {
+                title: 'Financial Review',
+                type: 'Judging',
+                description: 'Budget assessment, cost-benefit analysis, and funding recommendation scores.',
+                startOffsetDays: 35,
+                durationDays: 14,
+                reviewerCount: 3,
+            },
+            {
+                title: 'Compliance & COI Review',
+                type: 'Judging',
+                description: 'Conflict-of-interest checks, compliance controls, and audit trail validation.',
+                startOffsetDays: 49,
+                durationDays: 14,
+                reviewerCount: 3,
+            },
+            {
+                title: 'Final Approval Committee',
+                type: 'Judging',
+                description: 'Committee review, consensus scoring, and final funding decisions.',
+                startOffsetDays: 63,
+                durationDays: 7,
+                reviewerCount: 5,
+            },
+            {
+                title: 'Funding Notification',
+                type: 'Announcement',
+                description: 'Grant recipients notified and funding disbursement initiated.',
+                startOffsetDays: 70,
+                durationDays: 1,
+            },
+        ],
+    };
+}
+
+/**
+ * Academic Admissions
+ * Application → document verification → references → academic review → committee → decision
+ */
+function getAcademicAdmissionsConfig(): TemplateConfig {
+    return {
+        eventType: 'Academic Admissions',
+        judgingConfig: {
+            minReviewersPerEntry: 2,
+            idealReviewersPerEntry: 3,
+            totalJuryPoolSize: 15,
+            blindReview: true,
+            scoreNormalization: true,
+            scoringScale: '1-10',
+        },
+        totalRounds: { min: 4, ideal: 6 },
+        rounds: [
+            {
+                title: 'Application Period',
+                type: 'Submission',
+                description: 'Student applications with document upload and academic record submission.',
+                startOffsetDays: -90,
+                durationDays: 90,
+            },
+            {
+                title: 'Document Verification',
+                type: 'Judging',
+                description: 'Transcript validation, qualification checks, and missing document follow-up.',
+                startOffsetDays: 0,
+                durationDays: 14,
+                reviewerCount: 2,
+            },
+            {
+                title: 'Reference Collection',
+                type: 'Judging',
+                description: 'Blind reference letter management with secure referee submission links.',
+                startOffsetDays: 14,
+                durationDays: 21,
+            },
+            {
+                title: 'Academic Record Review',
+                type: 'Judging',
+                description: 'GPA evaluation, subject-wise grade validation, and rubric-based scoring.',
+                startOffsetDays: 35,
+                durationDays: 14,
+                reviewerCount: 3,
+            },
+            {
+                title: 'Department Review',
+                type: 'Judging',
+                description: 'Department-specific evaluation and multi-stage shortlisting.',
+                startOffsetDays: 49,
+                durationDays: 14,
+                reviewerCount: 3,
+            },
+            {
+                title: 'Admissions Committee',
+                type: 'Judging',
+                description: 'Committee consensus scoring, ranking, and final admission decisions.',
+                startOffsetDays: 63,
+                durationDays: 7,
+                reviewerCount: 5,
+            },
+            {
+                title: 'Decision Release',
+                type: 'Announcement',
+                description: 'Admission decisions communicated to applicants.',
+                startOffsetDays: 70,
+                durationDays: 1,
+            },
+        ],
+    };
+}
+
+/**
+ * Abstracts & Journals
+ * Submission → compliance → plagiarism → peer review → editorial decision → publication
+ */
+function getAbstractsJournalsConfig(): TemplateConfig {
+    return {
+        eventType: 'Abstracts & Journals',
+        judgingConfig: {
+            minReviewersPerEntry: 2,
+            idealReviewersPerEntry: 3,
+            totalJuryPoolSize: 20,
+            blindReview: true,
+            scoreNormalization: true,
+            scoringScale: '1-7',
+        },
+        totalRounds: { min: 4, ideal: 6 },
+        rounds: [
+            {
+                title: 'Abstract & Manuscript Submission',
+                type: 'Submission',
+                description: 'Abstract, manuscript, and supplementary file submission with draft saving.',
+                startOffsetDays: -60,
+                durationDays: 60,
+            },
+            {
+                title: 'Formatting & Compliance Check',
+                type: 'Judging',
+                description: 'Word count enforcement, template compliance, and mandatory field verification.',
+                startOffsetDays: 0,
+                durationDays: 7,
+                reviewerCount: 2,
+            },
+            {
+                title: 'Plagiarism Screening',
+                type: 'Judging',
+                description: 'Similarity score generation and threshold-based flagging for editorial review.',
+                startOffsetDays: 7,
+                durationDays: 7,
+            },
+            {
+                title: 'Double-Blind Peer Review',
+                type: 'Judging',
+                description: 'Anonymized manuscripts reviewed by matched experts with conflict-of-interest checks.',
+                startOffsetDays: 14,
+                durationDays: 21,
+                reviewerCount: 3,
+            },
+            {
+                title: 'Editorial Decision',
+                type: 'Judging',
+                description: 'Editor triage and decision workflow: accept, minor/major revision, or reject.',
+                startOffsetDays: 35,
+                durationDays: 7,
+                reviewerCount: 2,
+            },
+            {
+                title: 'Revision Round',
+                type: 'Submission',
+                description: 'Authors submit revised manuscripts based on reviewer feedback.',
+                startOffsetDays: 42,
+                durationDays: 14,
+            },
+            {
+                title: 'Publication',
+                type: 'Announcement',
+                description: 'Final manuscript collection, metadata export, and publication scheduling.',
+                startOffsetDays: 56,
+                durationDays: 1,
+            },
+        ],
+    };
+}
+
+/**
+ * Personnel & Fellowships
+ * Nomination → endorsement → eligibility → blind review → committee → executive review
+ */
+function getPersonnelFellowshipsConfig(): TemplateConfig {
+    return {
+        eventType: 'Personnel & Fellowships',
+        judgingConfig: {
+            minReviewersPerEntry: 3,
+            idealReviewersPerEntry: 5,
+            totalJuryPoolSize: 15,
+            blindReview: true,
+            scoreNormalization: true,
+            scoringScale: '1-10',
+        },
+        totalRounds: { min: 4, ideal: 6 },
+        rounds: [
+            {
+                title: 'Nomination Period',
+                type: 'Submission',
+                description: 'Nomination submissions with third-party nomination and endorser management.',
+                startOffsetDays: -90,
+                durationDays: 90,
+            },
+            {
+                title: 'Nominee Endorsement',
+                type: 'Submission',
+                description: 'Nominee acceptance, consent tracking, and collaborative application completion.',
+                startOffsetDays: 0,
+                durationDays: 21,
+            },
+            {
+                title: 'Eligibility Validation',
+                type: 'Judging',
+                description: 'Eligibility checks, CV review, and supporting document verification.',
+                startOffsetDays: 21,
+                durationDays: 14,
+                reviewerCount: 3,
+            },
+            {
+                title: 'Blind Review',
+                type: 'Judging',
+                description: 'Rubric-based evaluation with conflict-of-interest detection and scorecards.',
+                startOffsetDays: 35,
+                durationDays: 21,
+                reviewerCount: 4,
+            },
+            {
+                title: 'Committee Deliberation',
+                type: 'Judging',
+                description: 'Committee discussion workspace, consensus scoring, and shortlist generation.',
+                startOffsetDays: 56,
+                durationDays: 7,
+                reviewerCount: 5,
+            },
+            {
+                title: 'Executive Review',
+                type: 'Judging',
+                description: 'Executive briefing, candidate comparison, and final approval workflows.',
+                startOffsetDays: 63,
+                durationDays: 7,
+                reviewerCount: 3,
+            },
+            {
+                title: 'Fellowship Announcement',
+                type: 'Announcement',
+                description: 'Selected fellows notified and selection outcomes published.',
+                startOffsetDays: 70,
+                durationDays: 1,
+            },
+        ],
+    };
+}
+
+/**
+ * Creative Contests
+ * Submission → validation → jury evaluation → public voting → final scoring → winners
+ */
+function getCreativeContestsConfig(): TemplateConfig {
+    return {
+        eventType: 'Creative Contests',
+        judgingConfig: {
+            minReviewersPerEntry: 3,
+            idealReviewersPerEntry: 5,
+            totalJuryPoolSize: 20,
+            blindReview: true,
+            scoreNormalization: true,
+            scoringScale: '1-10',
+        },
+        totalRounds: { min: 4, ideal: 5 },
+        rounds: [
+            {
+                title: 'Submission Period',
+                type: 'Submission',
+                description: 'Multi-format uploads for video, photography, design files, and portfolios.',
+                startOffsetDays: -60,
+                durationDays: 60,
+            },
+            {
+                title: 'File Validation & Gallery Preview',
+                type: 'Judging',
+                description: 'Format checking, gallery curation, and side-by-side comparison setup.',
+                startOffsetDays: 0,
+                durationDays: 7,
+                reviewerCount: 2,
+            },
+            {
+                title: 'Jury Evaluation',
+                type: 'Judging',
+                description: 'Blind rubric-based scoring with weighted criteria and judge feedback.',
+                startOffsetDays: 7,
+                durationDays: 14,
+                reviewerCount: 5,
+            },
+            {
+                title: 'Public Voting',
+                type: 'Voting',
+                description: 'Audience voting with fraud detection, vote auditing, and real-time leaderboards.',
+                startOffsetDays: 21,
+                durationDays: 14,
+            },
+            {
+                title: 'Final Scoring & Winner Selection',
+                type: 'Judging',
+                description: 'Combined jury and public scores with tie-breaking and winner selection.',
+                startOffsetDays: 35,
+                durationDays: 7,
+                reviewerCount: 5,
+            },
+            {
+                title: 'Winner Announcement',
+                type: 'Announcement',
+                description: 'Winners announced with certificates, prizes, and public showcase pages.',
+                startOffsetDays: 42,
+                durationDays: 1,
+            },
+        ],
+    };
 }
 
 /**

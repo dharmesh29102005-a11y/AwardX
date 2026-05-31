@@ -21,7 +21,8 @@ import {
 } from './supabase';
 import { getCurrentOrgId, getCurrentUserId } from './supabase';
 import { fetchBackendJson } from './backendApi';
-import { Program, Organization, Category, Round, Submission, Judge, Role, Log, SocialAccount, ScheduledPost, TeamMember } from './models';
+import { Program, Organization, Category, Round, Submission, Judge, Role, Log, SocialAccount, ScheduledPost, TeamMember, EventType } from './models';
+import { getTemplateConfig } from './templateRoundConfigs';
 import { normalizeIntegrationSources } from '../lib/programIntegrations';
 import { PageConfig, PageSection, Sponsor, FAQ, TimelineMilestone } from '../types/overviewPage';
 
@@ -727,7 +728,7 @@ class DatabaseService {
       id: program.id,
       title: program.title,
       category: program.industry_category || 'General',
-      type: (program.event_types?.name || 'Award') as Program['type'],
+      type: (program.event_types?.name || 'Other') as Program['type'],
       status: this.mapStatus(program.status) as 'Active' | 'Draft' | 'Completed',
       deadline: program.deadline ? new Date(program.deadline).toISOString().split('T')[0] : '',
       entriesCount: program.entries_count || 0,
@@ -828,31 +829,41 @@ class DatabaseService {
       metadata: { title: created.title },
     });
 
-    // Auto-create default rounds from database template (default: true)
+    // Auto-create default rounds from database template or local config (default: true)
     const shouldAutoCreate = options?.autoCreateRounds !== false;
-    if (shouldAutoCreate && eventTypeId && created.deadline && supabase) {
+    if (shouldAutoCreate && created.deadline && program.type) {
       try {
-        // Query program_templates table for default rounds
-        const { data: template, error: templateError } = await supabase
-          .from('program_templates')
-          .select('default_rounds, default_criteria')
-          .eq('event_type_id', eventTypeId)
-          .eq('is_active', true)
-          .maybeSingle();
+        type RoundTemplate = {
+          title: string;
+          type: string;
+          description: string;
+          startOffsetDays: number;
+          durationDays: number;
+          reviewerCount?: number;
+        };
 
-        if (!templateError && template?.default_rounds) {
-          const roundTemplates = template.default_rounds as Array<{
-            title: string;
-            type: string;
-            description: string;
-            startOffsetDays: number;
-            durationDays: number;
-            reviewerCount?: number;
-          }>;
+        let roundTemplates: RoundTemplate[] | null = null;
 
+        if (eventTypeId && supabase) {
+          const { data: template, error: templateError } = await supabase
+            .from('program_templates')
+            .select('default_rounds, default_criteria')
+            .eq('event_type_id', eventTypeId)
+            .eq('is_active', true)
+            .maybeSingle();
+
+          if (!templateError && template?.default_rounds) {
+            roundTemplates = template.default_rounds as RoundTemplate[];
+          }
+        }
+
+        if (!roundTemplates?.length) {
+          roundTemplates = getTemplateConfig(program.type as EventType).rounds;
+        }
+
+        if (roundTemplates.length) {
           const deadlineDate = new Date(created.deadline);
 
-          // Create rounds from template
           for (const roundTemplate of roundTemplates) {
             const startDate = new Date(deadlineDate);
             startDate.setDate(startDate.getDate() + roundTemplate.startOffsetDays);
@@ -860,7 +871,6 @@ class DatabaseService {
             const endDate = new Date(startDate);
             endDate.setDate(endDate.getDate() + roundTemplate.durationDays);
 
-            // Determine status based on current date
             const now = new Date();
             let status: 'Upcoming' | 'Active' | 'Completed';
             if (now < startDate) {
