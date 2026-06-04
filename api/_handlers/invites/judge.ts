@@ -64,15 +64,20 @@ export default async function handler(req: any, res: any) {
     .maybeSingle();
 
   const resolvedOrganizationId = organizationId || inviterProfile?.organization_id || null;
-  if (!resolvedOrganizationId) {
-    res.status(400).json({ error: 'organizationId is required for judge invites' });
-    return;
-  }
-
-  const permitted = await canManageInvites(supabase, auth.user.id, resolvedOrganizationId);
-  if (!permitted) {
-    res.status(403).json({ error: 'Insufficient permissions to send judge invites' });
-    return;
+  if (resolvedOrganizationId) {
+    const permitted = await canManageInvites(supabase, auth.user.id, resolvedOrganizationId);
+    if (!permitted) {
+      res.status(403).json({ error: 'Insufficient permissions to send judge invites' });
+      return;
+    }
+  } else {
+    // If not associated with an organization, check if system-wide mailer fallback is configured
+    const systemApiKey = process.env.RESEND_API_KEY;
+    const systemFrom = process.env.RESEND_FROM;
+    if (!systemApiKey || !systemFrom) {
+      res.status(400).json({ error: 'organizationId is required for judge invites (no system mailer configured)' });
+      return;
+    }
   }
 
   const mailer = await getOrgResendMailer(resolvedOrganizationId);
@@ -83,6 +88,23 @@ export default async function handler(req: any, res: any) {
       warning: RESEND_NOT_CONFIGURED_MESSAGE,
     });
     return;
+  }
+
+  let deadlineText = '';
+  if (programId) {
+    const { data: program } = await supabase
+      .from('programs')
+      .select('deadline')
+      .eq('id', programId)
+      .maybeSingle();
+    if (program?.deadline) {
+      const d = new Date(program.deadline);
+      deadlineText = d.toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      });
+    }
   }
 
   const { id: emailLogId } = await createEmailLog(supabase, {
@@ -96,6 +118,7 @@ export default async function handler(req: any, res: any) {
       programTitle,
       inviteUrl: actionUrl,
       judgeName,
+      deadlineText,
     },
   });
 
@@ -104,7 +127,7 @@ export default async function handler(req: any, res: any) {
       from: mailer.from,
       to: normalizedEmail,
       subject,
-      text: `Hi ${judgeName},\n\nYou have been invited to judge "${programTitle}".\n\nClick the link below to access your judging portal and view the assigned submissions:\n${actionUrl}\n\nYou can bookmark this link to return to your portal at any time during the judging period.\n\nBest,\nThe AwardX team`,
+      text: `Hi ${judgeName},\n\nYou have been invited to judge for the upcoming event.\n\nEvent: ${programTitle}\nRole: Judge${deadlineText ? `\nDeadline: ${deadlineText}` : ''}\n\nClick the link below to access your judging portal and view the assigned submissions:\n${actionUrl}\n\nYou can bookmark this link to return to your portal at any time during the judging period.\n\nBest,\nThe AwardX team`,
       html: `<!doctype html>
 <html>
   <head>
@@ -127,11 +150,29 @@ export default async function handler(req: any, res: any) {
             <!-- Body -->
             <tr>
               <td style="padding:40px;">
-                <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#1e293b;line-height:1.3;">You're Invited to Judge</h2>
-                <p style="margin:0 0 24px;font-size:15px;color:#64748b;line-height:1.5;">for <strong style="color:#4f46e5;">${escapeHtml(programTitle)}</strong></p>
+                <h2 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#1e293b;line-height:1.3;">You're Invited to Judge</h2>
+                
+                <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#334155;">Hi ${escapeHtml(judgeName)},</p>
+                <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#334155;">You have been selected as a judge. Please review the details of the invitation below:</p>
 
-                <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#334155;">Hi ${escapeHtml(judgeName)},</p>
-                <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#334155;">You've been selected as a judge for <strong>${escapeHtml(programTitle)}</strong>. Click the button below to access your judging portal where you can review the assigned submissions and provide your scores.</p>
+                <!-- Info Grid -->
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin:24px 0;background-color:#f1f5f9;border-radius:8px;padding:20px;border-left:4px solid #4f46e5;">
+                  <tr>
+                    <td style="padding:6px 0;font-size:14px;color:#475569;width:100px;vertical-align:top;"><strong>Event:</strong></td>
+                    <td style="padding:6px 0;font-size:14px;color:#1e293b;font-weight:600;vertical-align:top;">${escapeHtml(programTitle)}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:6px 0;font-size:14px;color:#475569;vertical-align:top;"><strong>Role:</strong></td>
+                    <td style="padding:6px 0;font-size:14px;color:#1e293b;font-weight:600;vertical-align:top;">Judge</td>
+                  </tr>
+                  ${deadlineText ? `
+                  <tr>
+                    <td style="padding:6px 0;font-size:14px;color:#475569;vertical-align:top;"><strong>Deadline:</strong></td>
+                    <td style="padding:6px 0;font-size:14px;color:#1e293b;font-weight:600;vertical-align:top;">${escapeHtml(deadlineText)}</td>
+                  </tr>` : ''}
+                </table>
+
+                <p style="margin:20px 0 24px;font-size:15px;line-height:1.6;color:#334155;">Click the button below to access your judging portal where you can view assigned submissions, scoresheets, and evaluation criteria.</p>
 
                 <!-- CTA Button -->
                 <div style="text-align:center;margin:32px 0;">

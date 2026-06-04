@@ -1114,6 +1114,21 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                         if ((judgeData as any)?.reused_existing) {
                            toast.success('Existing judge found. Reassigned to this program.');
                         }
+                        // Also send email on "Add Judge"
+                        const siteUrl = window.location.origin;
+                        const inviteToken = judgeData?.invite_token;
+                        if (inviteToken) {
+                           const magicLinkUrl = siteUrl + '/judge/' + inviteToken;
+                           await sendJudgeInviteEmail({
+                              email: judgeForm.email.trim(),
+                              name: judgeForm.name.trim(),
+                              programTitle: activeEvent?.title || 'your workspace',
+                              organizationId: (judgeData as any)?.organization_id,
+                              programId: (judgeData as any)?.program_id || activeEvent?.id,
+                              inviteId: (judgeData as any)?.id,
+                              inviteUrl: magicLinkUrl,
+                           });
+                        }
                      }
                      refreshAll();
                      setIsJudgeModalOpen(false);

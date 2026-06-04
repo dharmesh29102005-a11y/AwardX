@@ -8,6 +8,15 @@ import { canManageInvites } from '../../_utils/invitePermissions';
 
 const INVITE_TTL_DAYS = 30;
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function resolveSafeInviteUrl(siteUrl: string, inviteUrl: string | undefined, token: string) {
   const fallbackUrl = `${siteUrl}/team-invite/${token}`;
   if (!inviteUrl) return fallbackUrl;
@@ -144,7 +153,23 @@ export default async function handler(req: any, res: any) {
     const roleLine = roleName ? `Assigned role: ${roleName}` : 'Assigned role: Team member';
     const siteUrl = (process.env.SITE_URL || process.env.VITE_SITE_URL || 'https://awardstuff.vercel.app').replace(/\/$/, '');
     const resolvedInviteUrl = resolveSafeInviteUrl(siteUrl, inviteUrl, inviteRow.token);
-    const inviteLine = `Accept your invite: ${resolvedInviteUrl}`;
+
+    let deadlineText = '';
+    if (programId) {
+      const { data: program } = await supabase
+        .from('programs')
+        .select('deadline')
+        .eq('id', programId)
+        .maybeSingle();
+      if (program?.deadline) {
+        const d = new Date(program.deadline);
+        deadlineText = d.toLocaleDateString('en-US', {
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric',
+        });
+      }
+    }
 
     const { id: emailLogId } = await createEmailLog(supabase, {
       organizationId: resolvedOrganizationId,
@@ -158,6 +183,7 @@ export default async function handler(req: any, res: any) {
         inviterName: inviterProfile?.full_name || null,
         programTitle,
         inviteUrl: resolvedInviteUrl,
+        deadlineText,
       },
     });
 
@@ -184,14 +210,78 @@ export default async function handler(req: any, res: any) {
       from: mailer.from,
       to: normalizedEmail,
       subject,
-      text: `The AwardX team for ${programTitle} wants you to join this event.\n${roleLine}\n${inviteLine}`,
-      html: `<div style="font-family:Arial,sans-serif;line-height:1.6">
-        <h2>The AwardX team for ${programTitle} wants you to join</h2>
-        <p>${roleLine}</p>
-        <p><a href="${resolvedInviteUrl}" style="display:inline-block;padding:10px 14px;border-radius:8px;background:#4f46e5;color:#ffffff;text-decoration:none;font-weight:600">Accept Team Invite</a></p>
-        <p style="font-size:12px;color:#64748b">If the button does not work, copy this link into your browser:<br/>${resolvedInviteUrl}</p>
-      </div>`,
-    });
+      text: `The AwardX team for ${programTitle} wants you to join this event.\n${roleLine}\nAccept your invite: ${resolvedInviteUrl}`,
+      html: `<!doctype html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <title>${escapeHtml(subject)}</title>
+  </head>
+  <body style="margin:0;padding:0;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+    <span style="display:none;visibility:hidden;opacity:0;color:transparent;height:0;width:0;">You have been invited to join the team for ${escapeHtml(programTitle)}.</span>
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f8fafc;">
+      <tr>
+        <td align="center" style="padding:40px 20px;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="560" style="width:560px;max-width:100%;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+            <!-- Header -->
+            <tr>
+              <td style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:32px 40px;text-align:center;">
+                <h1 style="margin:0;font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">AwardX</h1>
+              </td>
+            </tr>
+            <!-- Body -->
+            <tr>
+              <td style="padding:40px;">
+                <h2 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#1e293b;line-height:1.3;">Join the Team</h2>
+                
+                <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#334155;">Hi,</p>
+                <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#334155;">
+                  ${inviterProfile?.full_name ? `<strong>${escapeHtml(inviterProfile.full_name)}</strong>` : 'An administrator'} has invited you to join the team on AwardX. Please review the details of the invitation below:
+                </p>
+
+                <!-- Info Grid -->
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin:24px 0;background-color:#f1f5f9;border-radius:8px;padding:20px;border-left:4px solid #4f46e5;">
+                  <tr>
+                    <td style="padding:6px 0;font-size:14px;color:#475569;width:100px;vertical-align:top;"><strong>Event:</strong></td>
+                    <td style="padding:6px 0;font-size:14px;color:#1e293b;font-weight:600;vertical-align:top;">${escapeHtml(programTitle)}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:6px 0;font-size:14px;color:#475569;vertical-align:top;"><strong>Role:</strong></td>
+                    <td style="padding:6px 0;font-size:14px;color:#1e293b;font-weight:600;vertical-align:top;">${escapeHtml(roleName || 'Team member')}</td>
+                  </tr>
+                  ${deadlineText ? `
+                  <tr>
+                    <td style="padding:6px 0;font-size:14px;color:#475569;vertical-align:top;"><strong>Deadline:</strong></td>
+                    <td style="padding:6px 0;font-size:14px;color:#1e293b;font-weight:600;vertical-align:top;">${escapeHtml(deadlineText)}</td>
+                  </tr>` : ''}
+                </table>
+
+                <p style="margin:20px 0 24px;font-size:15px;line-height:1.6;color:#334155;">Click the button below to accept the invitation and configure your workspace profile.</p>
+
+                <!-- CTA Button -->
+                <div style="text-align:center;margin:32px 0;">
+                  <a href="${resolvedInviteUrl}" style="background:#4f46e5;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;padding:14px 32px;border-radius:8px;display:inline-block;box-shadow:0 2px 4px rgba(79,70,229,0.3);">Accept Team Invite</a>
+                </div>
+
+                <p style="margin:24px 0 0;font-size:15px;line-height:1.6;color:#334155;">Best regards,<br /><strong>The AwardX Team</strong></p>
+              </td>
+            </tr>
+            <!-- Footer -->
+            <tr>
+              <td style="background:#f8fafc;padding:24px 40px;border-top:1px solid #e2e8f0;">
+                <p style="margin:0;font-size:12px;line-height:1.5;color:#94a3b8;text-align:center;">
+                  This email was sent by AwardX on behalf of the program organizer.<br />
+                  470 Noor Ave STE B #1148, South San Francisco, CA 94080
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`,
 
     if (sendError) {
       console.error('Resend API error:', sendError);

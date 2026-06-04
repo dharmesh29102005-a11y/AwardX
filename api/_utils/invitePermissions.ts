@@ -2,6 +2,17 @@ const ALLOWED_ROLE_NAMES = new Set(['admin', 'program manager']);
 const ALLOWED_PERMISSION_KEYS = new Set(['manage_teams', 'manage_programs']);
 
 export async function canManageInvites(supabase: any, userId: string, organizationId: string) {
+  // First, check if the user is the organization owner (defined by profiles table)
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (profile && profile.organization_id === organizationId) {
+    return true;
+  }
+
   const { data: memberships, error } = await supabase
     .from('organization_members')
     .select('status, roles(name, permissions)')
