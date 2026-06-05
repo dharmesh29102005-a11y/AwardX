@@ -16,6 +16,7 @@ import invitesRouter from './invites.js';
 import integrationsRouter from './integrations.js';
 import programFormsRouter from './programForms.js';
 import kycRouter from './kyc.js';
+import scoresRouter from './scores.js';
 
 const router = Router();
 
@@ -36,5 +37,6 @@ router.use('/invites', invitesRouter);
 router.use('/integrations', integrationsRouter);
 router.use('/program-forms', programFormsRouter);
 router.use('/kyc', kycRouter);
+router.use('/scores', scoresRouter);
 
 export default router;
