@@ -321,6 +321,13 @@ async function handleVerifyJudge(req: any, res: any) {
 					completed_at,
 					assigned_at,
 					submission_id,
+					round_id,
+					rounds (
+						id,
+						title,
+						type,
+						status
+					),
 					submissions (
 						id,
 						title,
@@ -389,9 +396,33 @@ async function handleVerifyJudge(req: any, res: any) {
 					.in('id', categoryIds);
 				categoryMap = new Map((categories || []).map((c: any) => [c.id, c.title]));
 			}
+
+			// Fetch round info for submissions via round_submissions
+			const submissionIds = assignments.map((row: any) => row.submission_id).filter(Boolean);
+			let roundMap = new Map<string, { id: string; name: string; type: string; status: string }>();
+			if (submissionIds.length > 0) {
+				const { data: roundSubs } = await supabase
+					.from('round_submissions')
+					.select('submission_id, rounds!round_submissions_round_id_fkey(id, title, type, status)')
+					.in('submission_id', submissionIds);
+				if (roundSubs) {
+					for (const rs of roundSubs as any[]) {
+						if (rs.rounds && !roundMap.has(rs.submission_id)) {
+							roundMap.set(rs.submission_id, {
+								id: rs.rounds.id,
+								name: rs.rounds.title,
+								type: rs.rounds.type,
+								status: rs.rounds.status,
+							});
+						}
+					}
+				}
+			}
+
 			assignments = assignments.map((row: any) => ({
 				...row,
 				category_name: categoryMap.get(row.submissions?.category_id) || 'Uncategorized',
+				round_info: roundMap.get(row.submission_id) || null,
 			}));
 		}
 
@@ -419,6 +450,12 @@ async function handleVerifyJudge(req: any, res: any) {
 				submissionJudgeId: row.id,
 				status: row.status,
 				completedAt: row.completed_at,
+				round: row.round_info || (row.rounds ? {
+					id: row.rounds.id,
+					name: row.rounds.title,
+					type: row.rounds.type,
+					status: row.rounds.status,
+				} : null),
 				submission: row.submissions ? {
 					id: row.submissions.id,
 					title: row.submissions.title,

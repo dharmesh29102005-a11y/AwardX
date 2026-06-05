@@ -45,6 +45,7 @@ interface AssignmentInfo {
   submissionJudgeId: string;
   status: string;
   completedAt?: string;
+  round?: { id: string; name: string; type: string; status: string } | null;
   submission: Submission | null;
 }
 
@@ -451,6 +452,11 @@ export const JudgePortalPage: React.FC = () => {
                             <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
                               #{idx + 1}
                             </span>
+                            {assignment.round && (
+                              <span className="inline-flex items-center rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700">
+                                <Layers className="w-3 h-3 mr-1" /> {assignment.round.name}
+                              </span>
+                            )}
                             <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
                               {submission.category}
                             </span>
