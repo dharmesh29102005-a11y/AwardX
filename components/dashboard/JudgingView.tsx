@@ -39,6 +39,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    const [replaceAssignments, setReplaceAssignments] = useState(false);
    const [isAddJudgeModalOpen, setIsAddJudgeModalOpen] = useState(false);
    const [addJudgeTargetGroup, setAddJudgeTargetGroup] = useState<JudgeGroup | null>(null);
+   const [editJudge, setEditJudge] = useState<Judge | null>(null);
    const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
    const [groupModalGroup, setGroupModalGroup] = useState<JudgeGroup | null>(null);
    const [viewGroupModalOpen, setViewGroupModalOpen] = useState(false);
@@ -96,6 +97,13 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    const { data: judgeGroups = [] } = useQuery<JudgeGroup[]>({
       queryKey: queryKeys.judgeGroups.all(activeEvent?.id ?? ''),
       queryFn: () => db.getJudgeGroups(activeEvent!.id),
+      enabled: !!activeEvent?.id,
+      staleTime: 30_000,
+   });
+
+   const { data: categories = [] } = useQuery({
+      queryKey: queryKeys.categories.all(activeEvent?.id ?? ''),
+      queryFn: () => db.getCategories(activeEvent!.id),
       enabled: !!activeEvent?.id,
       staleTime: 30_000,
    });
@@ -472,6 +480,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    const judgeNameById = new Map(judgeDirectory.map((judge) => [judge.id, judge.name]));
    const assignedSubmissions = submissions.filter((submission) => (submission.assignedJudges || []).length > 0);
    const groupNameById = new Map(judgeGroups.map((group) => [group.id, group.name]));
+   const categoryNameById = new Map(categories.map((category) => [category.id, category.title]));
 
    const groupStats = React.useMemo(() => {
       const stats = new Map<string, { active: number; pending: number }>();
@@ -682,6 +691,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                               pendingCount={stats.pending}
                               onAddJudge={() => {
                                  setAddJudgeTargetGroup(group);
+                                 setEditJudge(null);
                                  setIsAddJudgeModalOpen(true);
                               }}
                               onView={() => handleOpenGroupView(group)}
@@ -703,10 +713,11 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                               size="sm"
                               variant="outline"
                               className="flex items-center justify-center gap-2 w-full sm:w-auto"
-                              onClick={() => {
-                                 setAddJudgeTargetGroup(null);
-                                 setIsAddJudgeModalOpen(true);
-                              }}
+                                 onClick={() => {
+                                    setAddJudgeTargetGroup(null);
+                                    setEditJudge(null);
+                                    setIsAddJudgeModalOpen(true);
+                                 }}
                            >
                               <Plus className="w-4 h-4" /> Add / Invite Judge
                            </Button>
@@ -741,6 +752,20 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                               {judge.groupId && groupNameById.get(judge.groupId) && (
                                  <div className="mt-2 inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                                     {groupNameById.get(judge.groupId)}
+                                 </div>
+                              )}
+                              {(judge.categoryIds || []).length > 0 && (
+                                 <div className="mt-2 flex flex-wrap gap-1">
+                                    {(judge.categoryIds || []).slice(0, 2).map((categoryId) => (
+                                       <span key={categoryId} className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700">
+                                          {categoryNameById.get(categoryId) || 'Award'}
+                                       </span>
+                                    ))}
+                                    {(judge.categoryIds || []).length > 2 && (
+                                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">
+                                          +{(judge.categoryIds || []).length - 2}
+                                       </span>
+                                    )}
                                  </div>
                               )}
                            </div>
@@ -806,6 +831,17 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                            ) : (
                               <Mail className="w-4 h-4" />
                            )}
+                        </button>
+                        <button
+                           className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg border border-slate-100 transition-colors"
+                           onClick={() => {
+                              setEditJudge(judge);
+                              setAddJudgeTargetGroup(null);
+                              setIsAddJudgeModalOpen(true);
+                           }}
+                           title="Edit judge"
+                        >
+                           <Sliders className="w-4 h-4" />
                         </button>
                         <button
                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg border border-slate-100 transition-colors"
@@ -1211,13 +1247,18 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
 
          <AddJudgeToGroupModal
             isOpen={isAddJudgeModalOpen}
-            onClose={() => setIsAddJudgeModalOpen(false)}
+            onClose={() => {
+               setIsAddJudgeModalOpen(false);
+               setEditJudge(null);
+            }}
             targetGroup={addJudgeTargetGroup}
             judgeGroups={judgeGroups}
             judges={judges}
             teamMembers={teamMembers}
             programId={activeEvent?.id ?? ''}
             programTitle={activeEvent?.title ?? 'your workspace'}
+            categories={categories}
+            editJudge={editJudge}
             onDone={refreshAll}
          />
 

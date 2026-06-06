@@ -1490,6 +1490,7 @@ class DatabaseService {
       title: s.title || 'Untitled',
       applicant: s.applicant_name || s.applicant_email || 'Unknown',
       category: s.categories?.title || 'Uncategorized',
+      categoryId: s.category_id || null,
       status: this.mapSubmissionStatus(s.status) as Submission['status'],
       score: s.average_score ? Math.round(s.average_score) : null,
       date: s.submitted_at ? new Date(s.submitted_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
@@ -1670,6 +1671,7 @@ class DatabaseService {
       completedCount: j.completed_count || 0,
       role: j.role || undefined,
       groupId: j.judge_group_members?.[0]?.group_id || undefined,
+      categoryIds: (j.judge_category_assignments || []).map((assignment: any) => assignment.category_id).filter(Boolean),
     }));
   }
 
@@ -1693,7 +1695,7 @@ class DatabaseService {
 
     let query = supabase
       .from('judges')
-      .select('*, judge_group_members(group_id)', { count: 'exact' })
+      .select('*, judge_group_members(group_id), judge_category_assignments(category_id)', { count: 'exact' })
       .eq('organization_id', orgId)
       .order('name');
 
@@ -1719,6 +1721,7 @@ class DatabaseService {
       completedCount: j.completed_count || 0,
       role: j.role || undefined,
       groupId: j.judge_group_members?.[0]?.group_id || undefined,
+      categoryIds: (j.judge_category_assignments || []).map((assignment: any) => assignment.category_id).filter(Boolean),
     }));
 
     const total = count || 0;
@@ -1731,14 +1734,18 @@ class DatabaseService {
     };
   }
 
-  async createJudge(payload: { name: string; email: string; bio?: string; programId?: string; role?: string; groupId?: string }) {
-    const { groupId, ...createPayload } = payload;
+  async createJudge(payload: { name: string; email: string; bio?: string; programId?: string; role?: string; groupId?: string; categoryIds?: string[] }) {
+    const { groupId, categoryIds, ...createPayload } = payload;
     const { data, error } = await judges.create(createPayload);
     if (error) throw new Error(error.message || 'Failed to add judge');
 
     if (groupId && data?.id) {
       const { error: groupError } = await judgeGroups.assignJudgeToGroup(data.id, groupId);
       if (groupError) throw new Error(groupError.message || 'Failed to assign judge to group');
+    }
+
+    if (data?.id && payload.programId) {
+      await this.updateJudgeCategoryAssignments(data.id, payload.programId, categoryIds || []);
     }
 
     await this.safeAuditLog({
@@ -1751,14 +1758,18 @@ class DatabaseService {
     return data;
   }
 
-  async inviteJudge(payload: { name: string; email: string; programId?: string; role?: string; groupId?: string }): Promise<any> {
-    const { groupId, ...invitePayload } = payload;
+  async inviteJudge(payload: { name: string; email: string; programId?: string; role?: string; groupId?: string; categoryIds?: string[] }): Promise<any> {
+    const { groupId, categoryIds, ...invitePayload } = payload;
     const { data, error } = await judges.invite(invitePayload.email, invitePayload.name, invitePayload.programId, invitePayload.role);
     if (error || !data) throw new Error(error?.message || 'Failed to invite judge');
 
     if (groupId && data.id) {
       const { error: groupError } = await judgeGroups.assignJudgeToGroup(data.id, groupId);
       if (groupError) throw new Error(groupError.message || 'Failed to assign judge to group');
+    }
+
+    if (data.id && payload.programId) {
+      await this.updateJudgeCategoryAssignments(data.id, payload.programId, categoryIds || []);
     }
 
     await this.safeAuditLog({
@@ -1769,6 +1780,126 @@ class DatabaseService {
       details: payload.email,
     });
     return data; // Includes invite_token for magic link
+  }
+
+  async updateJudgeCategoryAssignments(judgeId: string, programId: string, categoryIds: string[]): Promise<void> {
+    if (!supabase) throw new Error('Supabase not configured');
+
+    const uniqueCategoryIds = Array.from(new Set(categoryIds.filter(Boolean)));
+
+    const { data: categoriesData, error: categoriesError } = await supabase
+      .from('categories')
+      .select('id, parent_id')
+      .eq('program_id', programId);
+
+    if (categoriesError) throw new Error(categoriesError.message || 'Failed to load categories');
+
+    const categories = categoriesData || [];
+    const childrenByParent = new Map<string, string[]>();
+    categories.forEach((category: any) => {
+      if (!category.parent_id) return;
+      childrenByParent.set(category.parent_id, [...(childrenByParent.get(category.parent_id) || []), category.id]);
+    });
+
+    const scopedCategoryIds = new Set<string>();
+    const addCategoryAndChildren = (categoryId: string) => {
+      if (scopedCategoryIds.has(categoryId)) return;
+      scopedCategoryIds.add(categoryId);
+      (childrenByParent.get(categoryId) || []).forEach(addCategoryAndChildren);
+    };
+
+    const { data: existingScope, error: existingScopeError } = await supabase
+      .from('judge_category_assignments')
+      .select('category_id')
+      .eq('judge_id', judgeId);
+
+    if (existingScopeError) throw new Error(existingScopeError.message || 'Failed to load judge category scope');
+
+    const previousScopedCategoryIds = new Set<string>();
+    const addPreviousCategoryAndChildren = (categoryId: string) => {
+      if (previousScopedCategoryIds.has(categoryId)) return;
+      previousScopedCategoryIds.add(categoryId);
+      (childrenByParent.get(categoryId) || []).forEach(addPreviousCategoryAndChildren);
+    };
+
+    (existingScope || [])
+      .map((assignment: any) => assignment.category_id)
+      .filter(Boolean)
+      .forEach(addPreviousCategoryAndChildren);
+
+    uniqueCategoryIds.forEach(addCategoryAndChildren);
+
+    const { error: deleteScopeError } = await supabase
+      .from('judge_category_assignments')
+      .delete()
+      .eq('judge_id', judgeId);
+
+    if (deleteScopeError) throw new Error(deleteScopeError.message || 'Failed to clear judge category scope');
+
+    if (uniqueCategoryIds.length > 0) {
+      const { error: insertScopeError } = await supabase
+        .from('judge_category_assignments')
+        .insert(uniqueCategoryIds.map((categoryId) => ({ judge_id: judgeId, category_id: categoryId })));
+
+      if (insertScopeError) throw new Error(insertScopeError.message || 'Failed to save judge category scope');
+    }
+
+    const { data: previousAssignments, error: previousError } = await supabase
+      .from('submission_judges')
+      .select('id, submission_id, submissions!inner(program_id, category_id)')
+      .eq('judge_id', judgeId)
+      .eq('submissions.program_id', programId)
+      .eq('status', 'pending');
+
+    if (previousError) throw new Error(previousError.message || 'Failed to load judge assignments');
+
+    const previousScopedIds = (previousAssignments || [])
+      .filter((assignment: any) => {
+        const categoryId = assignment.submissions?.category_id;
+        return categoryId && previousScopedCategoryIds.has(categoryId) && !scopedCategoryIds.has(categoryId);
+      })
+      .map((assignment: any) => assignment.id);
+
+    if (previousScopedIds.length > 0) {
+      const { error: removeError } = await supabase
+        .from('submission_judges')
+        .delete()
+        .in('id', previousScopedIds);
+
+      if (removeError) throw new Error(removeError.message || 'Failed to remove old judge assignments');
+    }
+
+    if (scopedCategoryIds.size > 0) {
+      const { data: matchingSubmissions, error: submissionsError } = await supabase
+        .from('submissions')
+        .select('id')
+        .eq('program_id', programId)
+        .in('category_id', Array.from(scopedCategoryIds));
+
+      if (submissionsError) throw new Error(submissionsError.message || 'Failed to load matching submissions');
+
+      const rows = (matchingSubmissions || []).map((submission: any) => ({
+        submission_id: submission.id,
+        judge_id: judgeId,
+      }));
+
+      if (rows.length > 0) {
+        const { error: upsertError } = await supabase
+          .from('submission_judges')
+          .upsert(rows, { onConflict: 'submission_id,judge_id' });
+
+        if (upsertError) throw new Error(upsertError.message || 'Failed to assign category submissions');
+      }
+    }
+
+    await this.safeAuditLog({
+      action: 'Updated judge category assignments',
+      actionType: 'update',
+      resourceType: 'judge',
+      resourceId: judgeId,
+      details: `${uniqueCategoryIds.length} selected categories`,
+      metadata: { judgeId, programId, categoryIds: uniqueCategoryIds },
+    });
   }
 
   async deleteJudge(judgeId: string): Promise<void> {
@@ -3261,4 +3392,3 @@ class DatabaseService {
 }
 
 export const db = new DatabaseService();
-

@@ -94,6 +94,7 @@ export interface Submission {
   applicant?: string;
   applicantName?: string; // Preferred name from new data layer
   category: string;
+  categoryId?: string | null;
   status: 'Pending' | 'Under Review' | 'Shortlisted' | 'Accepted' | 'Rejected';
   score: number | null;
   date?: string;
@@ -119,6 +120,7 @@ export interface Judge {
   completedCount: number;
   role?: string;
   groupId?: string;
+  categoryIds?: string[];
 }
 
 export interface JudgeGroup {
@@ -235,5 +237,4 @@ export const PERMISSIONS = {
   VIEW_LOGS: 'view_logs',
   MANAGE_SETTINGS: 'manage_settings',
 } as const;
-
 

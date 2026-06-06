@@ -1,8 +1,8 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Mail, Search, UserCheck, UserPlus } from 'lucide-react';
 import { Button } from '../../Button';
 import { Modal } from '../../Modal';
-import { Judge, JudgeGroup, TeamMember } from '../../../services/models';
+import { Category, Judge, JudgeGroup, TeamMember } from '../../../services/models';
 import { db } from '../../../services/database';
 import { sendJudgeInviteEmail } from '../../../services/email';
 import { toast } from 'sonner';
@@ -18,6 +18,8 @@ interface AddJudgeToGroupModalProps {
   teamMembers: TeamMember[];
   programId: string;
   programTitle: string;
+  categories: Category[];
+  editJudge?: Judge | null;
   onDone: () => void;
 }
 
@@ -25,6 +27,30 @@ const STATUS_PILL: Record<string, string> = {
   Active:    'bg-green-100 text-green-700',
   Invited:   'bg-amber-100 text-amber-700',
   Completed: 'bg-indigo-100 text-indigo-700',
+};
+
+const CategoryCheckbox: React.FC<{
+  checked: boolean;
+  indeterminate: boolean;
+  onChange: () => void;
+}> = ({ checked, indeterminate, onChange }) => {
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.indeterminate = indeterminate;
+    }
+  }, [indeterminate]);
+
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+    />
+  );
 };
 
 export const AddJudgeToGroupModal: React.FC<AddJudgeToGroupModalProps> = ({
@@ -36,17 +62,20 @@ export const AddJudgeToGroupModal: React.FC<AddJudgeToGroupModalProps> = ({
   teamMembers,
   programId,
   programTitle,
+  categories,
+  editJudge,
   onDone,
 }) => {
   const [search, setSearch] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteName, setInviteName] = useState('');
   const [inviteGroupId, setInviteGroupId] = useState('');
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
-    setInviteGroupId(targetGroup?.id || '');
-  }, [targetGroup?.id, isOpen]);
+    setInviteGroupId(editJudge?.groupId || targetGroup?.id || '');
+  }, [editJudge, targetGroup?.id, isOpen]);
 
   // Emails of judges already on this program (to exclude from org-member results)
   const judgeEmailSet = useMemo(
@@ -82,6 +111,113 @@ export const AddJudgeToGroupModal: React.FC<AddJudgeToGroupModalProps> = ({
   const hasSearched = search.trim().length > 0;
   const hasAnyResult = matchingJudges.length > 0 || matchingMembers.length > 0;
   const noResults = hasSearched && !hasAnyResult;
+  const isEditMode = Boolean(editJudge);
+
+  const categoryTree = useMemo(() => {
+    const byParent = new Map<string, Category[]>();
+    categories.forEach((category) => {
+      const key = category.parentId || 'root';
+      byParent.set(key, [...(byParent.get(key) || []), category]);
+    });
+    byParent.forEach((items) => items.sort((a, b) => a.title.localeCompare(b.title)));
+
+    const rows: Array<{ category: Category; depth: number }> = [];
+    const subtreeIdsByCategory = new Map<string, string[]>();
+
+    const collectSubtreeIds = (categoryId: string): string[] => {
+      const childIds = (byParent.get(categoryId) || []).flatMap((child) => collectSubtreeIds(child.id));
+      const ids = [categoryId, ...childIds];
+      subtreeIdsByCategory.set(categoryId, ids);
+      return ids;
+    };
+
+    const visit = (parentId: string, depth: number) => {
+      (byParent.get(parentId) || []).forEach((category) => {
+        rows.push({ category, depth });
+        collectSubtreeIds(category.id);
+        visit(category.id, depth + 1);
+      });
+    };
+    visit('root', 0);
+    return { rows, subtreeIdsByCategory };
+  }, [categories]);
+
+  const selectedCategorySet = useMemo(() => new Set(selectedCategoryIds), [selectedCategoryIds]);
+
+  useEffect(() => {
+    const initialIds = editJudge?.categoryIds || [];
+    const expandedIds = new Set<string>();
+    initialIds.forEach((categoryId) => {
+      (categoryTree.subtreeIdsByCategory.get(categoryId) || [categoryId]).forEach((id) => expandedIds.add(id));
+    });
+    setSelectedCategoryIds(Array.from(expandedIds));
+  }, [categoryTree, editJudge, isOpen]);
+
+  const toggleCategory = (categoryId: string) => {
+    const subtreeIds = categoryTree.subtreeIdsByCategory.get(categoryId) || [categoryId];
+    setSelectedCategoryIds((prev) => {
+      const current = new Set(prev);
+      const isFullySelected = subtreeIds.every((id) => current.has(id));
+
+      if (isFullySelected) {
+        subtreeIds.forEach((id) => current.delete(id));
+      } else {
+        subtreeIds.forEach((id) => current.add(id));
+      }
+
+      return Array.from(current);
+    });
+  };
+
+  const CategorySelector = (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <label className="text-sm font-semibold text-slate-800">Award Categories</label>
+        {selectedCategoryIds.length > 0 && (
+          <span className="rounded-full bg-indigo-100 px-2.5 py-1 text-[11px] font-semibold text-indigo-700">
+            {selectedCategoryIds.length} selected
+          </span>
+        )}
+      </div>
+      <div className="max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-inner shadow-slate-100/60">
+        {categoryTree.rows.length === 0 ? (
+          <div className="px-2 py-3 text-xs text-slate-400">No awards created yet.</div>
+        ) : (
+          categoryTree.rows.map(({ category, depth }) => {
+            const subtreeIds = categoryTree.subtreeIdsByCategory.get(category.id) || [category.id];
+            const selectedInSubtree = subtreeIds.filter((id) => selectedCategorySet.has(id)).length;
+            const isChecked = selectedInSubtree === subtreeIds.length;
+            const isIndeterminate = selectedInSubtree > 0 && !isChecked;
+            const childCount = Math.max(0, subtreeIds.length - 1);
+
+            return (
+              <label
+                key={category.id}
+                className={`flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-colors ${
+                  isChecked || isIndeterminate ? 'bg-indigo-50 text-slate-900' : 'text-slate-700 hover:bg-slate-50'
+                }`}
+                style={{ marginLeft: `${depth * 22}px` }}
+              >
+                <CategoryCheckbox
+                  checked={isChecked}
+                  indeterminate={isIndeterminate}
+                  onChange={() => toggleCategory(category.id)}
+                />
+                <span className={`${depth === 0 ? 'font-semibold' : 'font-medium'} min-w-0 flex-1 truncate`}>
+                  {category.title}
+                </span>
+                {childCount > 0 && (
+                  <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500 ring-1 ring-slate-200">
+                    {childCount}
+                  </span>
+                )}
+              </label>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
 
   // Pre-fill invite form when nothing is found
   useEffect(() => {
@@ -101,22 +237,41 @@ export const AddJudgeToGroupModal: React.FC<AddJudgeToGroupModalProps> = ({
   /** Existing judge → assign to group (no new record needed) */
   const handleAssignToGroup = async (judge: Judge) => {
     const groupId = targetGroup?.id || inviteGroupId;
-    if (!groupId) {
-      toast.error('Select a group first.');
-      return;
-    }
-    if (judge.groupId === groupId) {
-      toast.info(`${judge.name} is already in this group.`);
+    if (!groupId && selectedCategoryIds.length === 0) {
+      toast.error('Select a group or award category first.');
       return;
     }
     setBusy(judge.id);
     try {
-      await db.assignJudgeToGroup(judge.id, groupId);
-      toast.success(`${judge.name} assigned to group`);
+      if (groupId && judge.groupId !== groupId) {
+        await db.assignJudgeToGroup(judge.id, groupId);
+      }
+      await db.updateJudgeCategoryAssignments(judge.id, programId, selectedCategoryIds);
+      toast.success(`${judge.name} updated`);
       onDone();
       handleClose();
     } catch (err: any) {
       toast.error(err?.message || 'Failed to assign judge to group');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editJudge) return;
+    setBusy(editJudge.id);
+    try {
+      if (inviteGroupId && editJudge.groupId !== inviteGroupId) {
+        await db.assignJudgeToGroup(editJudge.id, inviteGroupId);
+      } else if (!inviteGroupId && editJudge.groupId) {
+        await db.removeJudgeFromGroup(editJudge.id);
+      }
+      await db.updateJudgeCategoryAssignments(editJudge.id, programId, selectedCategoryIds);
+      toast.success(`${editJudge.name} updated`);
+      onDone();
+      handleClose();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to update judge');
     } finally {
       setBusy(null);
     }
@@ -131,6 +286,7 @@ export const AddJudgeToGroupModal: React.FC<AddJudgeToGroupModalProps> = ({
         email: member.email,
         programId,
         groupId: targetGroup?.id || inviteGroupId || undefined,
+        categoryIds: selectedCategoryIds,
       });
       toast.success(`${member.name} added to group`);
       onDone();
@@ -159,6 +315,7 @@ export const AddJudgeToGroupModal: React.FC<AddJudgeToGroupModalProps> = ({
         email,
         programId,
         groupId: inviteGroupId || targetGroup?.id || undefined,
+        categoryIds: selectedCategoryIds,
       });
       const inviteToken = judgeData?.invite_token;
       if (!inviteToken) throw new Error('Unable to generate invite link. Please try again.');
@@ -185,7 +342,8 @@ export const AddJudgeToGroupModal: React.FC<AddJudgeToGroupModalProps> = ({
     setSearch('');
     setInviteEmail('');
     setInviteName('');
-    setInviteGroupId(targetGroup?.id || '');
+    setInviteGroupId(editJudge?.groupId || targetGroup?.id || '');
+    setSelectedCategoryIds(editJudge?.categoryIds || []);
     setBusy(null);
     onClose();
   };
@@ -196,9 +354,40 @@ export const AddJudgeToGroupModal: React.FC<AddJudgeToGroupModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
-      title={targetGroup ? `Add Judge — ${targetGroup.name}` : 'Add Judge'}
+      title={editJudge ? `Edit Judge — ${editJudge.name}` : targetGroup ? `Add Judge — ${targetGroup.name}` : 'Add Judge'}
     >
       <div className="space-y-5">
+        {isEditMode && editJudge ? (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              <div className="font-semibold text-sm text-slate-900">{editJudge.name}</div>
+              <div className="text-xs text-slate-500">{editJudge.email}</div>
+            </div>
+            {judgeGroups.length > 0 && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Judge Group</label>
+                <select
+                  value={inviteGroupId}
+                  onChange={(e) => setInviteGroupId(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400"
+                >
+                  <option value="">No group</option>
+                  {judgeGroups.map((g) => (
+                    <option key={g.id} value={g.id}>{g.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {CategorySelector}
+            <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+              <Button variant="ghost" onClick={handleClose}>Cancel</Button>
+              <Button onClick={handleSaveEdit} disabled={busy === editJudge.id}>
+                {busy === editJudge.id ? 'Saving...' : 'Save Judge'}
+              </Button>
+            </div>
+          </div>
+        ) : (
+        <>
 
         {/* Search input */}
         <div>
@@ -216,6 +405,7 @@ export const AddJudgeToGroupModal: React.FC<AddJudgeToGroupModalProps> = ({
             />
           </div>
         </div>
+        {CategorySelector}
 
         {/* ── Case 1: Existing judges on this program ── */}
         {matchingJudges.length > 0 && (
@@ -395,6 +585,8 @@ export const AddJudgeToGroupModal: React.FC<AddJudgeToGroupModalProps> = ({
         <div className="pt-2 flex justify-end border-t border-slate-100">
           <Button variant="ghost" onClick={handleClose}>Cancel</Button>
         </div>
+        </>
+        )}
       </div>
     </Modal>
   );

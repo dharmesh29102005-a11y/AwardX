@@ -1635,7 +1635,7 @@ export const judges = {
 
     let query = supabase
       .from('judges')
-      .select('*, judge_group_members(group_id)')
+      .select('*, judge_group_members(group_id), judge_category_assignments(category_id)')
       .eq('organization_id', orgId)
       .order('name');
     if (programId) {
