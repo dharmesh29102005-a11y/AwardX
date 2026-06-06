@@ -63,6 +63,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
     const queryClient = useQueryClient();
     const [activeTab, setActiveTab] = useState<'members' | 'roles'>('members');
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+    const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
     const [orgId, setOrgId] = useState<string | null>(null);
     const [inviteEmailBlocks, setInviteEmailBlocks] = useState<string[]>([]);
     const [inviteEmailDraft, setInviteEmailDraft] = useState('');
@@ -113,7 +114,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
 
     // Load current user + org
     useEffect(() => {
-        auth.getUser().then(({ user }) => setCurrentUserId(user?.id || null));
+        auth.getUser().then(({ user }) => { setCurrentUserId(user?.id || null); setCurrentUserEmail(user?.email || null); });
         getCurrentOrgId().then((id) => setOrgId(id));
     }, []);
 
@@ -379,6 +380,12 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
         }
 
         const dedupedEmails = Array.from(new Set(emails.map((email) => email.toLowerCase())));
+
+        if (currentUserEmail && dedupedEmails.includes(currentUserEmail.toLowerCase())) {
+            toast.error('You cannot invite yourself.');
+            return;
+        }
+
         setIsBulkInviting(true);
 
         const failed: string[] = [];
