@@ -66,8 +66,11 @@ export const TeamInvitePage: React.FC = () => {
   const [checking, setChecking] = React.useState(true);
   const [accepting, setAccepting] = React.useState(false);
   const [accepted, setAccepted] = React.useState(false);
+  const [declining, setDeclining] = React.useState(false);
+  const [declined, setDeclined] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [invite, setInvite] = React.useState<InviteContext | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = React.useState(false);
 
   React.useEffect(() => {
     if (!pathToken && token) {
@@ -89,6 +92,8 @@ export const TeamInvitePage: React.FC = () => {
       try {
         const { session } = await auth.getSession();
         const accessToken = session?.access_token;
+        setIsAuthenticated(!!accessToken);
+
         const resp = await fetch(`/api/invites/verify-team?token=${encodeURIComponent(token)}`, {
           headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
         });
@@ -96,6 +101,7 @@ export const TeamInvitePage: React.FC = () => {
 
         if (resp.status === 401 && body?.requiresAuth) {
           setInvite(body?.invite || null);
+          setIsAuthenticated(false);
           setChecking(false);
           return;
         }
@@ -106,7 +112,8 @@ export const TeamInvitePage: React.FC = () => {
           return;
         }
 
-        setAccepted(true);
+        setInvite(body?.invite || null);
+        setIsAuthenticated(true);
       } catch (e: any) {
         setError(e?.message || 'Failed to verify invite.');
       } finally {
@@ -140,7 +147,7 @@ export const TeamInvitePage: React.FC = () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ token, action: 'accept' }),
       });
 
       const body = await resp.json().catch(() => ({}));
@@ -150,7 +157,7 @@ export const TeamInvitePage: React.FC = () => {
       }
 
       setAccepted(true);
-      setTimeout(() => navigate('/dashboard', { replace: true }), 900);
+      setTimeout(() => navigate('/dashboard', { replace: true }), 1500);
     } catch (e: any) {
       setError(e?.message || 'Failed to accept invite.');
     } finally {
@@ -158,13 +165,44 @@ export const TeamInvitePage: React.FC = () => {
     }
   }, [navigate, nextPath, token]);
 
-  React.useEffect(() => {
+  const declineInvite = React.useCallback(async () => {
     if (!token) return;
+    setDeclining(true);
+    setError(null);
 
-    const redirectTarget = consumePostAuthRedirect('');
-    if (redirectTarget !== nextPath) return;
-    void acceptInvite();
-  }, [acceptInvite, nextPath, token]);
+    try {
+      const { session } = await auth.getSession();
+      const accessToken = session?.access_token;
+
+      if (!accessToken) {
+        storePostAuthRedirect(nextPath);
+        navigate(`/login?next=${encodeURIComponent(nextPath)}`);
+        return;
+      }
+
+      const resp = await fetch('/api/invites/verify-team', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ token, action: 'decline' }),
+      });
+
+      const body = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setError(body?.error || 'Failed to decline invite.');
+        return;
+      }
+
+      setDeclined(true);
+      setTimeout(() => navigate('/', { replace: true }), 1500);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to decline invite.');
+    } finally {
+      setDeclining(false);
+    }
+  }, [navigate, nextPath, token]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
@@ -180,6 +218,12 @@ export const TeamInvitePage: React.FC = () => {
             <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto mb-3" />
             <h1 className="text-xl font-bold text-slate-900">Invite Accepted</h1>
             <p className="text-slate-500 mt-1">You have been added to the team. Redirecting to your dashboard...</p>
+          </div>
+        ) : declined ? (
+          <div className="text-center">
+            <CheckCircle2 className="w-10 h-10 text-rose-600 mx-auto mb-3 animate-pulse" />
+            <h1 className="text-xl font-bold text-slate-900">Invite Declined</h1>
+            <p className="text-slate-500 mt-1">You have declined the team invitation. Redirecting...</p>
           </div>
         ) : error ? (
           <div className="text-center">
@@ -201,7 +245,13 @@ export const TeamInvitePage: React.FC = () => {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-slate-900">Team Invitation</h1>
-                <p className="text-sm text-slate-500">You have been invited to join an AwardX team.</p>
+                <p className="text-sm text-slate-500">
+                  You have been invited to join{' '}
+                  <span className="font-semibold text-indigo-600">
+                    {invite?.organizationName || 'an AwardX team'}
+                  </span>
+                  .
+                </p>
               </div>
             </div>
 
@@ -212,37 +262,54 @@ export const TeamInvitePage: React.FC = () => {
               </div>
             )}
 
-            <p className="text-sm text-slate-600">
-              Sign in with the invited email address, then accept this request to be added as a team member.
+            <p className="text-sm text-slate-600 mb-6">
+              {isAuthenticated
+                ? 'Please confirm whether you would like to accept or decline this team invitation.'
+                : 'Sign in with the invited email address, then accept this request to be added as a team member.'}
             </p>
 
-            <div className="mt-6 flex flex-wrap gap-2">
-              <button
-                onClick={acceptInvite}
-                disabled={accepting}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-60 inline-flex items-center gap-2"
-              >
-                {accepting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                Accept Request
-              </button>
-              <button
-                onClick={() => {
-                  storePostAuthRedirect(nextPath);
-                  navigate(`/login?next=${encodeURIComponent(nextPath)}`);
-                }}
-                className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50"
-              >
-                Log In
-              </button>
-              <button
-                onClick={() => {
-                  storePostAuthRedirect(nextPath);
-                  navigate(`/signup?next=${encodeURIComponent(nextPath)}`);
-                }}
-                className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50"
-              >
-                Sign Up
-              </button>
+            <div className="flex flex-wrap gap-3">
+              {isAuthenticated ? (
+                <>
+                  <button
+                    onClick={acceptInvite}
+                    disabled={accepting || declining}
+                    className="px-5 py-2.5 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-60 inline-flex items-center gap-2"
+                  >
+                    {accepting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    Accept Request
+                  </button>
+                  <button
+                    onClick={declineInvite}
+                    disabled={accepting || declining}
+                    className="px-5 py-2.5 border border-red-200 text-red-600 font-medium rounded-lg hover:bg-red-50 disabled:opacity-60 inline-flex items-center gap-2"
+                  >
+                    {declining ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    Decline
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => {
+                      storePostAuthRedirect(nextPath);
+                      navigate(`/login?next=${encodeURIComponent(nextPath)}`);
+                    }}
+                    className="px-5 py-2.5 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700"
+                  >
+                    Log In to Accept
+                  </button>
+                  <button
+                    onClick={() => {
+                      storePostAuthRedirect(nextPath);
+                      navigate(`/signup?next=${encodeURIComponent(nextPath)}`);
+                    }}
+                    className="px-5 py-2.5 border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50"
+                  >
+                    Sign Up
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}

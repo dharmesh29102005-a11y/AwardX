@@ -287,25 +287,7 @@ async function handleVerifyJudge(req: any, res: any) {
 			return res.status(404).json({ error: 'Invalid or expired invite link. This link may have already been used.' });
 		}
 
-		if (!judge.invite_token_used_at) {
-			// First-time accept: mark active for this event only.
-			// Intentionally does NOT add to organization_members — judge access is scoped to the event.
-			const { error: updateError } = await supabase
-				.from('judges')
-				.update({
-					invite_token_used_at: new Date().toISOString(),
-					status: 'active',
-					accepted_at: new Date().toISOString(),
-				})
-				.eq('id', judge.id);
-
-			if (updateError) {
-				console.error('Failed to mark judge token as used:', updateError);
-				return res.status(500).json({ error: 'Failed to process invite' });
-			}
-		}
-
-		const [programResult, assignmentResult, criteriaResult, orgResult] = await Promise.all([
+		const [programResult, orgResult] = await Promise.all([
 			judge.program_id
 				? supabase
 						.from('programs')
@@ -313,6 +295,87 @@ async function handleVerifyJudge(req: any, res: any) {
 						.eq('id', judge.program_id)
 						.single()
 				: Promise.resolve({ data: null }),
+			judge.organization_id
+				? supabase
+						.from('organizations')
+						.select('name')
+						.eq('id', judge.organization_id)
+						.single()
+				: Promise.resolve({ data: null }),
+		]);
+
+		const program: any = programResult.data;
+		const organizationName: string = (orgResult.data as any)?.name || '';
+
+		if (req.method === 'GET' && !judge.invite_token_used_at) {
+			return res.json({
+				ok: true,
+				requiresAcceptance: true,
+				judge: {
+					id: judge.id,
+					name: judge.name,
+					email: judge.email,
+					avatarUrl: judge.avatar_url,
+					bio: judge.bio,
+				},
+				program: program ? {
+					id: program.id,
+					title: program.title,
+					description: program.description,
+					coverImageUrl: program.cover_image_url,
+					status: program.status,
+					deadline: program.deadline,
+					timezone: program.timezone,
+					industryCategory: program.industry_category,
+				} : null,
+				organization: organizationName,
+			});
+		}
+
+		if (req.method === 'POST') {
+			const action = String(req.body?.action || 'accept').trim().toLowerCase();
+			if (action !== 'accept' && action !== 'decline') {
+				return res.status(400).json({ error: 'Invalid action parameter' });
+			}
+
+			if (action === 'decline') {
+				const { error: updateError } = await supabase
+					.from('judges')
+					.update({
+						status: 'declined',
+						invite_token_used_at: new Date().toISOString(),
+					})
+					.eq('id', judge.id);
+
+				if (updateError) {
+					console.error('Failed to decline judge invite:', updateError);
+					return res.status(500).json({ error: 'Failed to process invite' });
+				}
+
+				return res.json({ ok: true, declined: true });
+			}
+
+			if (!judge.invite_token_used_at) {
+				const { error: updateError } = await supabase
+					.from('judges')
+					.update({
+						invite_token_used_at: new Date().toISOString(),
+						status: 'active',
+						accepted_at: new Date().toISOString(),
+					})
+					.eq('id', judge.id);
+
+				if (updateError) {
+					console.error('Failed to mark judge token as used:', updateError);
+					return res.status(500).json({ error: 'Failed to process invite' });
+				}
+			}
+		}
+
+		let assignments: any[] = [];
+		let criteria: any[] = [];
+
+		const [assignmentResult, criteriaResult] = await Promise.all([
 			supabase
 				.from('submission_judges')
 				.select(`
@@ -349,19 +412,10 @@ async function handleVerifyJudge(req: any, res: any) {
 						.eq('program_id', judge.program_id)
 						.order('sort_order')
 				: Promise.resolve({ data: [] }),
-			judge.organization_id
-				? supabase
-						.from('organizations')
-						.select('name')
-						.eq('id', judge.organization_id)
-						.single()
-				: Promise.resolve({ data: null }),
 		]);
 
-		const program: any = programResult.data;
-		let assignments: any[] = assignmentResult.data || [];
-		const criteria: any[] = criteriaResult.data || [];
-		const organizationName: string = (orgResult.data as any)?.name || '';
+		assignments = assignmentResult.data || [];
+		criteria = criteriaResult.data || [];
 
 		// If no explicit assignments, auto-assign all program submissions to this judge
 		const effectiveProgramId = judge.program_id || program?.id;
@@ -592,6 +646,13 @@ router.get('/verify-team', async (req, res) => {
 			return res.status(resolved.statusCode || 404).json({ error: resolved.error });
 		}
 
+		const { data: org } = await supabase
+			.from('organizations')
+			.select('name')
+			.eq('id', resolved.invite.organization_id)
+			.maybeSingle();
+		const organizationName = org?.name || 'Organization';
+
 		const authResult = await getAuthUser(req);
 		if (authResult?.user) {
 			const authEmail = String(authResult.user.email || '').toLowerCase().trim();
@@ -611,34 +672,16 @@ router.get('/verify-team', async (req, res) => {
 				return res.status(403).json({ error: 'This invite is for a different email address.' });
 			}
 
-			const fullName = profile?.full_name || authResult.user.user_metadata?.full_name || authResult.user.user_metadata?.name || authEmail.split('@')[0] || 'User';
-			const { data: acceptanceResult, error: acceptError } = await supabase.rpc('accept_organization_invite', {
-				p_token: token,
-				p_user_id: authResult.user.id,
-				p_user_email: inviteEmail,
-				p_user_full_name: fullName,
+			return res.json({
+				ok: true,
+				requiresAcceptance: true,
+				invite: {
+					organizationId: resolved.invite.organization_id,
+					organizationName,
+					programId: resolved.invite.program_id,
+					email: resolved.invite.email,
+				},
 			});
-
-			if (acceptError) {
-				return res.status(500).json({ error: acceptError.message || 'Failed to accept invite' });
-			}
-
-			const resultRow = Array.isArray(acceptanceResult) ? acceptanceResult[0] : acceptanceResult;
-			if (!resultRow?.ok) {
-				const reason = resultRow?.error || 'accept_failed';
-				if (reason === 'already_processed') {
-					return res.json({ ok: true, accepted: true, alreadyAccepted: true });
-				}
-				if (reason === 'expired') {
-					return res.status(403).json({ error: 'This invite has expired.' });
-				}
-				if (reason === 'email_mismatch') {
-					return res.status(403).json({ error: 'This invite is for a different email address.' });
-				}
-				return res.status(500).json({ error: 'Failed to accept invite' });
-			}
-
-			return res.json({ ok: true, accepted: true });
 		}
 
 		return res.status(401).json({
@@ -646,6 +689,7 @@ router.get('/verify-team', async (req, res) => {
 			requiresAuth: true,
 			invite: {
 				organizationId: resolved.invite.organization_id,
+				organizationName,
 				programId: resolved.invite.program_id,
 				email: resolved.invite.email,
 			},
@@ -664,6 +708,11 @@ router.post('/verify-team', async (req, res) => {
 
 		const token = normalizeInviteToken(String(req.body?.token || ''));
 		if (!token) return res.status(400).json({ error: 'Invalid token format' });
+
+		const action = String(req.body?.action || 'accept').trim().toLowerCase();
+		if (action !== 'accept' && action !== 'decline') {
+			return res.status(400).json({ error: 'Invalid action parameter' });
+		}
 
 		const authResult = await getAuthUser(req);
 		if (!authResult?.user) {
@@ -708,6 +757,20 @@ router.post('/verify-team', async (req, res) => {
 		const existingProfileEmail = String(existingProfile?.email || '').toLowerCase().trim();
 		if (existingProfileEmail && existingProfileEmail !== inviteEmail) {
 			return res.status(403).json({ error: 'This invite is for a different email address.' });
+		}
+
+		if (action === 'decline') {
+			const { error: declineError } = await supabase
+				.from('organization_invites')
+				.update({ status: 'declined', accepted_at: null })
+				.eq('id', resolved.invite.id)
+				.eq('status', 'pending');
+
+			if (declineError) {
+				return res.status(500).json({ error: declineError.message || 'Failed to decline invite' });
+			}
+
+			return res.json({ ok: true, declined: true });
 		}
 
 		const fullName = existingProfile?.full_name || authResult.user.user_metadata?.full_name || authResult.user.user_metadata?.name || profileEmail.split('@')[0] || 'User';

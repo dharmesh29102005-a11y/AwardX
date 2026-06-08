@@ -68,6 +68,11 @@ export const JudgePortalPage: React.FC = () => {
   // Resolved token stored so fetchAssignments can use it without re-verifying
   const [resolvedToken, setResolvedToken] = useState<string | null>(null);
 
+  const [requiresAcceptance, setRequiresAcceptance] = useState(false);
+  const [accepting, setAccepting] = useState(false);
+  const [declining, setDeclining] = useState(false);
+  const [declined, setDeclined] = useState(false);
+
   // Task 14: separate function that only re-fetches assignments/criteria (no token re-verify)
   const fetchAssignments = useMemo(() => async (token: string) => {
     const resp = await fetch(`/api/invites/verify-judge?token=${encodeURIComponent(token)}`);
@@ -109,6 +114,16 @@ export const JudgePortalPage: React.FC = () => {
           return;
         }
 
+        if (data.requiresAcceptance) {
+          setJudge(data.judge);
+          setProgram(data.program);
+          setOrganization(data.organization || '');
+          setResolvedToken(token);
+          setRequiresAcceptance(true);
+          setStatus('success');
+          return;
+        }
+
         setJudge(data.judge);
         setProgram(data.program);
         const allAssignments: AssignmentInfo[] = data.assignments || [];
@@ -129,6 +144,70 @@ export const JudgePortalPage: React.FC = () => {
 
     verifyToken();
   }, [tokenParam]);
+
+  const acceptInvite = async () => {
+    const params = new URLSearchParams(window.location.search);
+    const token = tokenParam || params.get('token');
+    if (!token) return;
+
+    setAccepting(true);
+    try {
+      const resp = await fetch('/api/invites/verify-judge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, action: 'accept' }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        setStatus('error');
+        setErrorMessage(data.error || 'Failed to accept invite.');
+        return;
+      }
+
+      setRequiresAcceptance(false);
+      const allAssignments: AssignmentInfo[] = data.assignments || [];
+      const valid = allAssignments.filter((item) => item.submission);
+      setDeletedCount(allAssignments.length - valid.length);
+      setAssignments(valid);
+      setCriteria(data.criteria || []);
+    } catch (err) {
+      console.error('Accept error:', err);
+      setStatus('error');
+      setErrorMessage('Failed to accept invite.');
+    } finally {
+      setAccepting(false);
+    }
+  };
+
+  const declineInvite = async () => {
+    const params = new URLSearchParams(window.location.search);
+    const token = tokenParam || params.get('token');
+    if (!token) return;
+
+    setDeclining(true);
+    try {
+      const resp = await fetch('/api/invites/verify-judge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, action: 'decline' }),
+      });
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        setStatus('error');
+        setErrorMessage(data.error || 'Failed to decline invite.');
+        return;
+      }
+
+      setDeclined(true);
+      setTimeout(() => navigate('/'), 1500);
+    } catch (err) {
+      console.error('Decline error:', err);
+      setStatus('error');
+      setErrorMessage('Failed to decline invite.');
+    } finally {
+      setDeclining(false);
+    }
+  };
 
   const formatDate = (dateStr: string) => {
     try {
@@ -191,6 +270,76 @@ export const JudgePortalPage: React.FC = () => {
           >
             Go to Homepage
           </button>
+        </motion.div>
+      </div>
+    );
+  }
+
+  if (declined) {
+    return (
+      <div className="min-h-screen bg-[#f8faf9] flex items-center justify-center p-4 font-sans text-slate-900">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 md:p-12 max-w-md w-full text-center"
+        >
+          <div className="w-14 h-14 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center mx-auto mb-6">
+            <CheckCircle2 className="w-7 h-7 text-rose-600 animate-pulse" />
+          </div>
+          <h2 className="text-2xl font-semibold tracking-tight text-slate-900 mb-3">Invitation Declined</h2>
+          <p className="text-slate-500 mb-6">You have declined the invitation to judge this program. Redirecting...</p>
+        </motion.div>
+      </div>
+    );
+  }
+
+  if (requiresAcceptance) {
+    return (
+      <div className="min-h-screen bg-[#f8faf9] flex items-center justify-center p-4 font-sans text-slate-900">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 md:p-12 max-w-lg w-full"
+        >
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-700">
+              <Gavel className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight text-slate-900">Judge Invitation</h2>
+              <p className="text-sm text-slate-500">{organization || 'AwardX'}</p>
+            </div>
+          </div>
+
+          <p className="text-slate-600 mb-6 leading-relaxed">
+            Hello <span className="font-semibold text-slate-900">{judge?.name || 'Judge'}</span>, you have been invited to serve as a judge for the award program:
+            <span className="block mt-2 font-semibold text-emerald-700 text-lg">{program?.title || 'Award Program'}</span>
+          </p>
+
+          {program?.description && (
+            <p className="text-sm text-slate-500 mb-6 bg-slate-50 border border-slate-150 rounded-lg p-4 italic">
+              "{program.description}"
+            </p>
+          )}
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={acceptInvite}
+              disabled={accepting || declining}
+              className="px-6 py-3 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-60 transition-colors inline-flex items-center gap-2"
+            >
+              {accepting ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : null}
+              Accept Invitation
+            </button>
+            <button
+              onClick={declineInvite}
+              disabled={accepting || declining}
+              className="px-6 py-3 border border-red-200 text-red-600 font-semibold rounded-lg hover:bg-red-50 disabled:opacity-60 transition-colors inline-flex items-center gap-2"
+            >
+              {declining ? <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" /> : null}
+              Decline
+            </button>
+          </div>
         </motion.div>
       </div>
     );

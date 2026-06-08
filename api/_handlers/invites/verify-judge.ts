@@ -49,27 +49,8 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
-    // 2. Mark first-time acceptance, but allow repeat opens for the same invite link.
-    // This keeps judge portals refreshable and ensures new assignments show up.
-    if (!judge.invite_token_used_at) {
-      const { error: updateError } = await supabase
-        .from('judges')
-        .update({
-          invite_token_used_at: new Date().toISOString(),
-          status: 'active',
-          accepted_at: new Date().toISOString(),
-        })
-        .eq('id', judge.id);
-
-      if (updateError) {
-        console.error('Failed to mark token as used:', updateError);
-        res.status(500).json({ error: 'Failed to process invite' });
-        return;
-      }
-    }
-
     // 4–7. Fetch program, assignments, criteria, and org name in parallel.
-    const [programResult, assignmentResult, criteriaResult, orgResult] = await Promise.all([
+    const [programResult, orgResult] = await Promise.all([
       // 4. Program details
       judge.program_id
         ? supabase
@@ -79,6 +60,91 @@ export default async function handler(req: any, res: any) {
             .single()
         : Promise.resolve({ data: null }),
 
+      // 7. Organization name
+      judge.organization_id
+        ? supabase
+            .from('organizations')
+            .select('name')
+            .eq('id', judge.organization_id)
+            .single()
+        : Promise.resolve({ data: null }),
+    ]);
+
+    const program = programResult.data;
+    const organizationName: string = (orgResult.data as any)?.name || '';
+
+    if (req.method === 'GET' && !judge.invite_token_used_at) {
+      res.json({
+        ok: true,
+        requiresAcceptance: true,
+        judge: {
+          id: judge.id,
+          name: judge.name,
+          email: judge.email,
+          avatarUrl: judge.avatar_url,
+          bio: judge.bio,
+        },
+        program: program ? {
+          id: program.id,
+          title: program.title,
+          description: program.description,
+          coverImageUrl: program.cover_image_url,
+          status: program.status,
+          deadline: program.deadline,
+          timezone: program.timezone,
+          industryCategory: program.industry_category,
+        } : null,
+        organization: organizationName,
+      });
+      return;
+    }
+
+    if (req.method === 'POST') {
+      const action = String(req.body?.action || 'accept').trim().toLowerCase();
+      if (action !== 'accept' && action !== 'decline') {
+        res.status(400).json({ error: 'Invalid action parameter' });
+        return;
+      }
+
+      if (action === 'decline') {
+        const { error: updateError } = await supabase
+          .from('judges')
+          .update({
+            status: 'declined',
+            invite_token_used_at: new Date().toISOString(),
+          })
+          .eq('id', judge.id);
+
+        if (updateError) {
+          console.error('Failed to decline judge invite:', updateError);
+          res.status(500).json({ error: 'Failed to process invite' });
+          return;
+        }
+
+        res.json({ ok: true, declined: true });
+        return;
+      }
+
+      if (!judge.invite_token_used_at) {
+        const { error: updateError } = await supabase
+          .from('judges')
+          .update({
+            invite_token_used_at: new Date().toISOString(),
+            status: 'active',
+            accepted_at: new Date().toISOString(),
+          })
+          .eq('id', judge.id);
+
+        if (updateError) {
+          console.error('Failed to mark token as used:', updateError);
+          res.status(500).json({ error: 'Failed to process invite' });
+          return;
+        }
+      }
+    }
+
+    // Now fetch assignments and criteria for active judges
+    const [assignmentResult, criteriaResult] = await Promise.all([
       // 5. Judge assignments with submission details
       supabase
         .from('submission_judges')
@@ -111,21 +177,10 @@ export default async function handler(req: any, res: any) {
             .eq('program_id', judge.program_id)
             .order('sort_order')
         : Promise.resolve({ data: [] }),
-
-      // 7. Organization name
-      judge.organization_id
-        ? supabase
-            .from('organizations')
-            .select('name')
-            .eq('id', judge.organization_id)
-            .single()
-        : Promise.resolve({ data: null }),
     ]);
 
-    const program = programResult.data;
     let assignments: any[] = assignmentResult.data || [];
     const criteria: any[] = criteriaResult.data || [];
-    const organizationName: string = (orgResult.data as any)?.name || '';
 
     // If no explicit assignments, auto-assign all program submissions to this judge
     const effectiveProgramId = judge.program_id || (program as any)?.id;

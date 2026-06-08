@@ -772,7 +772,8 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                         </div>
                         <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
                            judge.status === 'Active' ? 'bg-green-100 text-green-700' : 
-                           judge.status === 'Completed' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'
+                           judge.status === 'Completed' ? 'bg-indigo-100 text-indigo-700' : 
+                           judge.status === 'Declined' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'
                         }`}>
                            {judge.status}
                         </span>

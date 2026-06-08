@@ -85,6 +85,13 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('name')
+      .eq('id', invite.organization_id)
+      .maybeSingle();
+    const organizationName = org?.name || 'Organization';
+
     const auth = await getAuthenticatedUser(req);
     if (!auth.user) {
       // Allow frontend to show invite context before auth, but do not accept yet.
@@ -93,6 +100,7 @@ export default async function handler(req: any, res: any) {
         requiresAuth: true,
         invite: {
           organizationId: invite.organization_id,
+          organizationName,
           programId: invite.program_id,
           email: invite.email,
         },
@@ -116,6 +124,42 @@ export default async function handler(req: any, res: any) {
     const profileEmail = String(profile?.email || '').toLowerCase().trim();
     if (profileEmail && profileEmail !== inviteEmail) {
       res.status(403).json({ error: 'This invite is for a different email address.' });
+      return;
+    }
+
+    if (req.method === 'GET') {
+      res.json({
+        ok: true,
+        requiresAcceptance: true,
+        invite: {
+          organizationId: invite.organization_id,
+          organizationName,
+          programId: invite.program_id,
+          email: invite.email,
+        },
+      });
+      return;
+    }
+
+    const action = String(req.body?.action || 'accept').trim().toLowerCase();
+    if (action !== 'accept' && action !== 'decline') {
+      res.status(400).json({ error: 'Invalid action parameter' });
+      return;
+    }
+
+    if (action === 'decline') {
+      const { error: declineError } = await supabase
+        .from('organization_invites')
+        .update({ status: 'declined', accepted_at: null })
+        .eq('id', invite.id)
+        .eq('status', 'pending');
+
+      if (declineError) {
+        res.status(500).json({ error: declineError.message || 'Failed to decline invite' });
+        return;
+      }
+
+      res.json({ ok: true, declined: true });
       return;
     }
 

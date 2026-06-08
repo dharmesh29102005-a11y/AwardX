@@ -2062,6 +2062,7 @@ class DatabaseService {
       'active': 'Active',
       'invited': 'Invited',
       'completed': 'Completed',
+      'declined': 'Declined',
     };
     return statusMap[status?.toLowerCase()] || 'Invited';
   }

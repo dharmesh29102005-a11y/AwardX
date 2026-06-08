@@ -114,7 +114,7 @@ export interface Judge {
   name: string;
   avatar: string;
   email: string;
-  status: 'Active' | 'Invited' | 'Completed';
+  status: 'Active' | 'Invited' | 'Completed' | 'Declined';
   progress: number;
   assignedCount: number;
   completedCount: number;
