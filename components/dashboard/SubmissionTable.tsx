@@ -92,8 +92,114 @@ const DISPLAY_FIELD_TYPES = new Set([
    'checkbox',
    'url',
    'date',
+   'time',
+   'datetime',
+   'country',
+   'currency',
+   'rating',
+   'tags',
+   'multi_select',
+   'multiselect',
    'award_selector',
+   'file',
+   'image',
+   'video',
+   'link',
 ]);
+
+const FILE_FIELD_TYPES = new Set(['file', 'image', 'video']);
+
+const renderFieldCell = (type: string, value: unknown): React.ReactNode => {
+   if (value == null || value === '') return <span className="text-slate-300">—</span>;
+
+   // File-like values may be { url, name } or string URLs
+   if (FILE_FIELD_TYPES.has(type)) {
+      const items: Array<{ url?: string; name?: string }> = Array.isArray(value)
+         ? value.map((v) => (typeof v === 'string' ? { url: v, name: v } : v))
+         : typeof value === 'string'
+         ? [{ url: value, name: value }]
+         : [value as any];
+
+      return (
+         <div className="flex items-center gap-1.5">
+            {items.slice(0, 3).map((item, idx) => {
+               const url = item?.url || (typeof item === 'string' ? item : undefined);
+               const name = item?.name || url?.split('/').pop() || `file ${idx + 1}`;
+               if (type === 'image' && url) {
+                  return (
+                     <a key={idx} href={url} target="_blank" rel="noreferrer" className="block">
+                        <img src={url} alt={name} className="h-8 w-8 rounded-md object-cover border border-slate-200" />
+                     </a>
+                  );
+               }
+               return (
+                  <a
+                     key={idx}
+                     href={url}
+                     target="_blank"
+                     rel="noreferrer"
+                     className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 hover:bg-indigo-50 text-[11px] font-semibold text-slate-700 hover:text-indigo-700 max-w-[140px] truncate"
+                     title={name}
+                  >
+                     <ExternalLink className="w-3 h-3 shrink-0" />
+                     <span className="truncate">{name}</span>
+                  </a>
+               );
+            })}
+            {items.length > 3 && (
+               <span className="text-[10px] font-bold text-slate-500">+{items.length - 3}</span>
+            )}
+         </div>
+      );
+   }
+
+   if (type === 'url' || type === 'link') {
+      const href = String(value);
+      return (
+         <a
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-[12px] font-semibold text-indigo-600 hover:text-indigo-800 max-w-[180px] truncate"
+         >
+            <ExternalLink className="w-3 h-3 shrink-0" />
+            <span className="truncate">{href.replace(/^https?:\/\//, '')}</span>
+         </a>
+      );
+   }
+
+   if (type === 'date' || type === 'datetime') {
+      const d = new Date(String(value));
+      if (!isNaN(d.getTime())) {
+         return <span className="text-[12px] font-medium text-slate-700">{d.toLocaleDateString()}</span>;
+      }
+   }
+
+   if (Array.isArray(value)) {
+      return (
+         <div className="flex flex-wrap gap-1 max-w-[220px]">
+            {(value as unknown[]).slice(0, 4).map((v, i) => (
+               <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold">
+                  {String(v)}
+               </span>
+            ))}
+            {(value as unknown[]).length > 4 && (
+               <span className="text-[10px] font-bold text-slate-500">+{(value as unknown[]).length - 4}</span>
+            )}
+         </div>
+      );
+   }
+
+   if (typeof value === 'boolean') {
+      return value ? <CheckCircle className="w-4 h-4 text-emerald-500" /> : <XCircle className="w-4 h-4 text-slate-300" />;
+   }
+
+   if (typeof value === 'object') {
+      return <span className="text-[11px] font-mono text-slate-500 max-w-[180px] truncate inline-block">{JSON.stringify(value)}</span>;
+   }
+
+   return <span className="text-[12px] text-slate-700">{String(value)}</span>;
+};
 
 export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, onNavigate }) => {
    const queryClient = useQueryClient();
@@ -157,9 +263,9 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
 
    const responseColumns = useMemo<FormFieldColumn[]>(() => {
       const fields = (formFieldsQuery.data || []) as Array<{ id: string; label: string; type: string }>;
+      // Show every field from the active form; the table scrolls horizontally to fit.
       return fields
          .filter((field) => DISPLAY_FIELD_TYPES.has(field.type))
-         .slice(0, 4)
          .map((field) => ({
             id: field.id,
             label: field.label,
@@ -598,12 +704,12 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                )}
             </div>
 
-            {/* Desktop Table */}
-            <div className="hidden min-h-0 flex-1 overflow-auto md:block">
-               <table className="w-full border-collapse text-left">
-                  <thead>
-                     <tr className="border-b border-slate-100 bg-slate-50/60 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                        <th className="p-5 w-16 text-center">
+            {/* Desktop Table — horizontally scrollable to fit all dynamic form columns */}
+            <div className="hidden min-h-0 flex-1 overflow-auto md:block submission-scroll">
+               <table className="min-w-max w-full border-collapse text-left">
+                  <thead className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur supports-[backdrop-filter]:bg-slate-50/70">
+                     <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                        <th className="p-5 w-16 text-center sticky left-0 z-20 bg-slate-50/95 supports-[backdrop-filter]:bg-slate-50/70 backdrop-blur">
                            <div className="flex justify-center">
                               <input
                                  type="checkbox"
@@ -613,16 +719,21 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                               />
                            </div>
                         </th>
-                        <th className="p-5">Submission</th>
+                        <th className="p-5 sticky left-16 z-20 bg-slate-50/95 supports-[backdrop-filter]:bg-slate-50/70 backdrop-blur whitespace-nowrap min-w-[240px] border-r border-slate-100/80">Submission</th>
                         {responseColumns.map((column) => (
-                           <th key={column.id} className="p-5">{column.label}</th>
+                           <th key={column.id} className="p-5 whitespace-nowrap min-w-[160px]">
+                              <span className="flex items-center gap-1.5">
+                                 {column.label}
+                                 <span className="text-[8px] font-mono text-slate-400 normal-case tracking-normal bg-slate-200/60 px-1 py-0.5 rounded">{column.type}</span>
+                              </span>
+                           </th>
                         ))}
-                        <th className="p-5">Category</th>
-                        <th className="p-5">Status</th>
-                        <th className="p-5">Judges</th>
-                        <th className="p-5">Score</th>
-                        <th className="p-5">Date</th>
-                        <th className="p-5 text-right">Actions</th>
+                        <th className="p-5 whitespace-nowrap">Category</th>
+                        <th className="p-5 whitespace-nowrap">Status</th>
+                        <th className="p-5 whitespace-nowrap">Judges</th>
+                        <th className="p-5 whitespace-nowrap">Score</th>
+                        <th className="p-5 whitespace-nowrap">Date</th>
+                        <th className="p-5 text-right whitespace-nowrap sticky right-0 z-20 bg-slate-50/95 supports-[backdrop-filter]:bg-slate-50/70 backdrop-blur border-l border-slate-100/80">Actions</th>
                      </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
@@ -635,22 +746,24 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                      )}
                      {!isLoading && submissions.map((sub) => {
                         const responses = getSubmissionResponses(sub);
+                        const selected = selectedIds.includes(sub.id);
+                        const rowBg = selected ? 'bg-indigo-50/60' : 'bg-white';
                         return (
                         <tr
                            key={sub.id}
-                           className={`group border-b border-slate-50 transition-all hover:bg-slate-50/70 ${selectedIds.includes(sub.id) ? 'bg-indigo-50/50' : ''}`}
+                           className={`group border-b border-slate-50 transition-all hover:bg-slate-50/70 ${selected ? 'bg-indigo-50/50' : ''}`}
                         >
-                           <td className="p-5 text-center">
+                           <td className={`p-5 text-center sticky left-0 z-10 ${rowBg} group-hover:bg-slate-50/95`}>
                               <div className="flex justify-center">
                                  <input
                                     type="checkbox"
                                     className="w-4.5 h-4.5 cursor-pointer rounded-md border-slate-300 text-indigo-600 accent-indigo-600 focus:ring-indigo-500"
-                                    checked={selectedIds.includes(sub.id)}
+                                    checked={selected}
                                     onChange={() => toggleSelection(sub.id)}
                                  />
                               </div>
                            </td>
-                           <td className="p-5">
+                           <td className={`p-5 sticky left-16 z-10 min-w-[240px] border-r border-slate-100/80 ${rowBg} group-hover:bg-slate-50/95`}>
                               <div className="flex items-center gap-4">
                                  <div className="relative group/image shrink-0">
                                     {sub.image ? (
@@ -674,8 +787,8 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                               </div>
                            </td>
                            {responseColumns.map((column) => (
-                              <td key={column.id} className="p-5 text-sm text-slate-700 max-w-[220px] truncate">
-                                 {formatSubmissionFieldValue(responses[column.id])}
+                              <td key={column.id} className="p-5 align-middle min-w-[160px]">
+                                 {renderFieldCell(column.type, responses[column.id])}
                               </td>
                            ))}
                            <td className="p-5">
@@ -744,7 +857,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                                  </div>
                               </div>
                            </td>
-                           <td className="p-5 text-right">
+                           <td className={`p-5 text-right sticky right-0 z-10 border-l border-slate-100/80 ${rowBg} group-hover:bg-slate-50/95`}>
                               <div className="flex items-center justify-end gap-1.5">
                                  <button
                                     onClick={() => handleView(sub)}

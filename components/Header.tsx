@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, Sparkles, LayoutDashboard, LogOut } from 'lucide-react';
+import { Menu, X, Sparkles, LayoutDashboard, LogOut, Github, Star } from 'lucide-react';
 import { Button } from './Button';
 import { motion, useScroll } from 'framer-motion';
 import { db } from '../services/database';
@@ -101,7 +101,7 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
     { id: 'features', label: 'Features' },
     { id: 'how-it-works', label: 'How it Works' },
     { id: 'stories', label: 'Stories' },
-    { id: 'pricing', label: 'Pricing' },
+    { id: 'docs', label: 'Docs' },
   ];
 
   const handleNavClick = (id: string) => {
@@ -111,86 +111,146 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
   };
 
   return (
-    <motion.header 
-      className={`fixed top-0 w-full z-50 transition-all duration-300 ${isScrolled ? 'bg-background/95 backdrop-blur-md border-b border-border shadow-sm' : 'bg-transparent'}`}
-      initial={{ y: -100 }}
-      animate={{ y: 0 }}
-      transition={{ duration: 0.5 }}
+    <motion.header
+      className="fixed top-0 left-0 right-0 z-50 pointer-events-none"
+      initial={{ y: -80, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-20">
-          <div 
-            className="flex items-center space-x-2 cursor-pointer group"
-            onClick={() => handleNavClick('home')}
-          >
-            <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
-              <Sparkles className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-xl font-bold tracking-tight text-foreground group-hover:text-emerald-700 transition-colors font-display">AwardX</span>
+      {/* Notch / Dynamic Island */}
+      <div className="flex justify-center pt-4 md:pt-5 px-3 pointer-events-none">
+        <motion.div
+          layout
+          transition={{ type: 'spring', stiffness: 280, damping: 30 }}
+          className={`pointer-events-auto relative flex items-center gap-1 rounded-full border shadow-[0_8px_32px_rgba(15,23,42,0.12)] transition-all duration-300 ${
+            isScrolled
+              ? 'border-white/40 bg-white/55 backdrop-blur-2xl shadow-[0_10px_40px_rgba(15,23,42,0.15)] px-2.5 py-1.5'
+              : 'border-white/30 bg-white/40 backdrop-blur-2xl px-3 py-2'
+          }`}
+        >
+          {/* Glass highlight */}
+          <div className="absolute inset-0 rounded-full pointer-events-none overflow-hidden">
+            <div className="absolute top-0 left-1/4 right-1/4 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent" />
           </div>
 
-          <nav className="hidden md:flex items-center space-x-8">
-            {navItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => handleNavClick(item.id)}
-                className={`text-sm font-medium transition-all duration-200 hover:text-emerald-700 ${
-                  currentPage === item.id ? 'text-emerald-700 font-semibold' : 'text-slate-600'
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
+          {/* Logo */}
+          <button
+            onClick={() => handleNavClick('home')}
+            className="relative flex items-center gap-2 pl-2 pr-3 py-1 rounded-full hover:bg-white/40 transition-colors"
+          >
+            <div className="relative w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-md shadow-indigo-500/30">
+              <Sparkles className="w-3.5 h-3.5 text-white" />
+              <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-white/30 to-transparent" />
+            </div>
+            <span className="hidden sm:inline text-sm font-bold tracking-tight text-slate-900 font-display">AwardX</span>
+          </button>
+
+          {/* Divider pill */}
+          <div className="hidden md:block h-5 w-px bg-slate-900/10 mx-1" />
+
+          {/* Nav items */}
+          <nav className="hidden md:flex items-center">
+            {navItems.map((item) => {
+              const active = currentPage === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => handleNavClick(item.id)}
+                  className="relative px-3.5 py-1.5 text-[13px] font-semibold rounded-full transition-colors"
+                >
+                  {active && (
+                    <motion.span
+                      layoutId="nav-pill"
+                      className="absolute inset-0 rounded-full bg-white/80 shadow-sm border border-white/60"
+                      transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                    />
+                  )}
+                  <span className={`relative z-10 ${active ? 'text-indigo-700' : 'text-slate-700 hover:text-slate-900'}`}>
+                    {item.label}
+                  </span>
+                </button>
+              );
+            })}
           </nav>
 
-          <div className="hidden md:flex items-center space-x-4">
+          <div className="hidden md:block h-5 w-px bg-slate-900/10 mx-1" />
+
+          {/* Right cluster */}
+          <div className="hidden md:flex items-center gap-1.5">
             {isAuthenticated ? (
               <>
-                <Button variant="ghost" size="sm" onClick={() => handleNavClick('dashboard')} className="flex items-center gap-2">
-                  <LayoutDashboard className="w-4 h-4" /> Dashboard
-                </Button>
-                <div className="h-4 w-px bg-slate-200"></div>
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors">
+                <button
+                  onClick={() => handleNavClick('dashboard')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-semibold text-slate-700 hover:bg-white/50 rounded-full transition-colors"
+                >
+                  <LayoutDashboard className="w-3.5 h-3.5" /> Dashboard
+                </button>
+                <div className="flex items-center gap-2 pl-2 pr-1 py-1 rounded-full bg-white/50 border border-white/40">
                   {currentUser?.avatar ? (
-                    <img src={currentUser.avatar} alt={currentUser.name} className="w-8 h-8 rounded-full border-2 border-slate-200 object-cover" />
+                    <img src={currentUser.avatar} alt={currentUser.name} className="w-6 h-6 rounded-full object-cover" />
                   ) : (
-                    <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-sm font-bold">
+                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-[10px] font-bold">
                       {currentUser?.name.charAt(0).toUpperCase() || 'U'}
                     </div>
                   )}
-                  <span className="text-sm font-medium text-slate-700">{currentUser?.name || 'User'}</span>
+                  <span className="text-[12px] font-semibold text-slate-700 pr-1">{currentUser?.name?.split(' ')[0] || 'User'}</span>
                 </div>
-                <Button variant="ghost" size="sm" onClick={handleLogout} className="flex items-center gap-2 text-slate-600 hover:text-red-600">
-                  <LogOut className="w-4 h-4" /> Logout
-                </Button>
+                <button
+                  onClick={handleLogout}
+                  className="p-1.5 rounded-full text-slate-500 hover:text-rose-600 hover:bg-white/50 transition-colors"
+                  title="Sign out"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
               </>
             ) : (
               <>
-                <Button variant="ghost" size="sm" onClick={() => handleNavClick('demo')} className="flex items-center gap-2">
-                  <LayoutDashboard className="w-4 h-4" /> Demo
-                </Button>
-                <div className="h-4 w-px bg-slate-200"></div>
-                <Button variant="ghost" size="sm" onClick={() => handleNavClick('login')}>Login</Button>
-                <Button variant="primary" size="sm" onClick={() => handleNavClick('signup')}>Get Started</Button>
+                <a
+                  href="https://github.com/awardx/awardx"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-semibold text-slate-700 hover:bg-white/50 rounded-full transition-colors border border-white/30"
+                  title="View on GitHub"
+                >
+                  <Github className="w-3.5 h-3.5" />
+                  <span className="flex items-center gap-0.5">
+                    <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" /> 12.4k
+                  </span>
+                </a>
+                <button
+                  onClick={() => handleNavClick('login')}
+                  className="px-3 py-1.5 text-[13px] font-semibold text-slate-700 hover:bg-white/50 rounded-full transition-colors"
+                >
+                  Login
+                </button>
+                <button
+                  onClick={() => handleNavClick('signup')}
+                  className="px-4 py-1.5 text-[13px] font-bold text-white rounded-full bg-gradient-to-br from-slate-900 to-slate-800 hover:from-indigo-600 hover:to-purple-600 shadow-md shadow-slate-900/20 transition-all"
+                >
+                  Self Host
+                </button>
               </>
             )}
           </div>
 
-          <button 
-            className="md:hidden text-slate-600 hover:text-slate-900"
+          {/* Mobile toggle */}
+          <button
+            className="md:hidden p-2 rounded-full text-slate-700 hover:bg-white/50 transition-colors"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           >
-            {isMobileMenuOpen ? <X /> : <Menu />}
+            {isMobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
           </button>
-        </div>
+        </motion.div>
       </div>
 
-      {/* Mobile Menu */}
+      {/* Mobile floating glass panel */}
       {isMobileMenuOpen && (
-        <motion.div 
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          className="md:hidden bg-background border-b border-border p-4 space-y-4 shadow-sm"
+        <motion.div
+          initial={{ opacity: 0, y: -8, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -8, scale: 0.98 }}
+          transition={{ duration: 0.2 }}
+          className="md:hidden pointer-events-auto mx-3 mt-2 rounded-3xl bg-white/70 backdrop-blur-2xl border border-white/50 p-4 space-y-3 shadow-2xl shadow-slate-900/10"
         >
           {navItems.map((item) => (
             <button
@@ -231,8 +291,16 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
                 <Button variant="secondary" className="w-full justify-center" onClick={() => handleNavClick('demo')}>
                   <LayoutDashboard className="w-4 h-4 mr-2" /> Open Demo
                 </Button>
+                <a
+                  href="https://github.com/awardx/awardx"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-center gap-2 text-sm font-medium text-slate-700 px-4 py-2 rounded-lg border border-slate-200 bg-white"
+                >
+                  <Github className="w-4 h-4" /> GitHub · 12.4k stars
+                </a>
                 <Button variant="outline" className="w-full justify-center" onClick={() => handleNavClick('login')}>Login</Button>
-                <Button variant="primary" className="w-full justify-center" onClick={() => handleNavClick('signup')}>Get Started</Button>
+                <Button variant="primary" className="w-full justify-center" onClick={() => handleNavClick('signup')}>Self Host</Button>
               </>
             )}
           </div>

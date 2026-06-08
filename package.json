@@ -34,6 +34,7 @@
     "framer-motion": "^11.0.28",
     "i": "^0.3.7",
     "lucide-react": "^0.555.0",
+    "minisearch": "^7.2.0",
     "radix-ui": "^1.4.3",
     "razorpay": "^2.9.6",
     "react": "^19.2.0",

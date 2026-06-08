@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { Github, Star, BookOpen, ArrowRight } from 'lucide-react';
 import { Hero } from '../Hero';
 import { FeatureScroll } from '../FeatureScroll';
 import { ProductShowcase } from '../ProductShowcase';
@@ -8,7 +9,7 @@ import { Features } from '../Features';
 import { AnalyticsPreview } from '../AnalyticsPreview';
 import { Timeline } from '../Timeline';
 import { Testimonials } from '../Testimonials';
-import { Pricing } from '../Pricing';
+import { OpenSourceShowcase } from '../OpenSourceShowcase';
 import { Button } from '../Button';
 
 const CTASection = () => (
@@ -28,24 +29,41 @@ const CTASection = () => (
         </div>
 
         <div className="relative z-10">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-indigo-300 text-xs font-bold tracking-widest uppercase mb-8">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            MIT Licensed · Forever Free
+          </div>
           <h2 className="text-4xl md:text-6xl font-bold text-white mb-8 tracking-tight font-display">
-            Ready to launch your <br />awards program?
+            Clone the repo. <br />Run your awards.
           </h2>
           <p className="text-lg md:text-xl text-slate-300 mb-12 max-w-2xl mx-auto">
-            Join 2,000+ organizations using AwardX to celebrate excellence, manage entries, and grow their community.
+            AwardX is open source under the MIT license. No seats, no plans, no gatekeeping &mdash;
+            just a serious platform for serious programs.
           </p>
           <div className="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-4">
-            <Button variant="white" size="lg" className="px-10 py-4 text-lg font-bold rounded-full">
-              Get Started Free
-            </Button>
+            <a
+              href="https://github.com/awardx/awardx"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center justify-center gap-2 px-10 py-4 text-lg font-bold rounded-full bg-white text-slate-900 hover:bg-slate-100 transition-colors shadow-xl"
+            >
+              <Github className="w-5 h-5" /> Star on GitHub
+              <span className="pl-3 ml-2 border-l border-slate-200 inline-flex items-center gap-1 text-sm">
+                <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" /> 12.4k
+              </span>
+            </a>
             <Button
               variant="outline"
               size="lg"
-              className="px-10 py-4 text-lg border-slate-600 text-slate-300 hover:text-white hover:border-white rounded-full"
+              className="px-10 py-4 text-lg border-slate-600 text-slate-300 hover:text-white hover:border-white rounded-full inline-flex items-center justify-center gap-2"
             >
-              Contact Sales
+              <BookOpen className="w-5 h-5" /> Read the Docs
+              <ArrowRight className="w-4 h-4" />
             </Button>
           </div>
+          <p className="mt-8 text-sm text-slate-500">
+            Prefer managed hosting? <a href="#" className="text-indigo-300 hover:text-white underline underline-offset-4">Join the AwardX Cloud waitlist &rarr;</a>
+          </p>
         </div>
       </motion.div>
     </div>
@@ -63,7 +81,7 @@ export const HomePage: React.FC = () => {
       <AnalyticsPreview />
       <Timeline />
       <Testimonials />
-      <Pricing />
+      <OpenSourceShowcase />
       <CTASection />
     </>
   );

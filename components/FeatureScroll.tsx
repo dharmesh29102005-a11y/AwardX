@@ -1,32 +1,36 @@
 import React from 'react';
-import { motion } from 'framer-motion';
-import { 
-    Zap, Shield, Globe, Smartphone, Cloud, 
-    Database, Lock, Share2, Printer, CreditCard,
-    LayoutGrid, Settings, FileText, Bell, Search,
+import {
+    Gavel, Trophy, FileText, Search, Bell, Shield, Activity,
+    Vote, Mail, BarChart3, CalendarClock, Users, LayoutTemplate,
+    CreditCard, ShieldCheck, KeyRound, Award, Database, Globe,
     LucideIcon
 } from 'lucide-react';
 
+/* Each tag references a feature that actually exists in the codebase. */
+
 const row1 = [
-    { icon: Zap, label: "Real-time Scoring" },
-    { icon: Shield, label: "Fraud Detection" },
-    { icon: Globe, label: "Multi-language" },
-    { icon: Smartphone, label: "Mobile Optimized" },
-    { icon: Cloud, label: "Cloud Storage" },
-    { icon: Database, label: "CRM Sync" },
-    { icon: Lock, label: "GDPR Compliant" },
-    { icon: Share2, label: "Social Sharing" },
+    { icon: Gavel, label: "Multi-round Judging" },
+    { icon: CalendarClock, label: "Schedule & Rounds" },
+    { icon: FileText, label: "Submissions Table" },
+    { icon: LayoutTemplate, label: "Form Builder" },
+    { icon: BarChart3, label: "Analytics" },
+    { icon: Shield, label: "Teams & Roles" },
+    { icon: Activity, label: "Audit Logs" },
+    { icon: Trophy, label: "Awards" },
 ];
 
 const row2 = [
-    { icon: Printer, label: "PDF Parsing" },
-    { icon: CreditCard, label: "Global Payments" },
-    { icon: LayoutGrid, label: "Custom Forms" },
-    { icon: Settings, label: "API Access" },
-    { icon: FileText, label: "Auto-Invoicing" },
-    { icon: Bell, label: "WhatsApp Alerts" },
-    { icon: Search, label: "SEO Optimized" },
-    { icon: Shield, label: "Audit Logs" },
+    { icon: Vote, label: "Public Voting" },
+    { icon: Mail, label: "Reach Campaigns" },
+    { icon: KeyRound, label: "Judge Portal" },
+    { icon: Search, label: "⌘K Universal Search" },
+    { icon: CreditCard, label: "Razorpay Payments" },
+    { icon: ShieldCheck, label: "Didit KYC" },
+    { icon: Bell, label: "Resend Email" },
+    { icon: Users, label: "Categories" },
+    { icon: Award, label: "Leaderboard" },
+    { icon: Database, label: "Realtime Updates" },
+    { icon: Globe, label: "Public Program Pages" },
 ];
 
 interface FeatureTagProps {
@@ -35,9 +39,11 @@ interface FeatureTagProps {
 }
 
 const FeatureTag: React.FC<FeatureTagProps> = ({ icon: Icon, label }) => (
-    <div className="flex items-center space-x-3 bg-white px-6 py-4 rounded-2xl border border-slate-100 shadow-sm whitespace-nowrap min-w-[200px] hover:shadow-md hover:border-indigo-100 transition-all duration-300 group">
-        <div className="p-2 bg-slate-50 rounded-lg group-hover:bg-indigo-50 transition-colors">
-            <Icon className="w-5 h-5 text-slate-500 group-hover:text-indigo-600 transition-colors" />
+    <div className="relative flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/60 shadow-[0_8px_20px_rgba(15,23,42,0.06)] whitespace-nowrap min-w-[200px] hover:bg-white/80 hover:shadow-[0_10px_30px_rgba(99,102,241,0.15)] hover:-translate-y-0.5 hover:border-indigo-200 transition-all duration-300 group overflow-hidden">
+        {/* Glass top highlight */}
+        <div className="absolute top-0 left-4 right-4 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent" />
+        <div className="p-2 rounded-xl bg-gradient-to-br from-white to-slate-50 border border-white/80 shadow-sm group-hover:from-indigo-50 group-hover:to-purple-50 transition-colors">
+            <Icon className="w-4 h-4 text-slate-600 group-hover:text-indigo-600 transition-colors" />
         </div>
         <span className="font-semibold text-slate-700 group-hover:text-slate-900 text-sm">{label}</span>
     </div>
@@ -45,11 +51,15 @@ const FeatureTag: React.FC<FeatureTagProps> = ({ icon: Icon, label }) => (
 
 export const FeatureScroll: React.FC = () => {
     return (
-        <section className="py-20 bg-slate-50 overflow-hidden border-y border-slate-200/50">
-             <div className="flex flex-col gap-8">
+        <section className="py-20 bg-gradient-to-b from-white via-slate-50 to-white overflow-hidden border-y border-slate-100/80 relative">
+            {/* Subtle background grid */}
+            <div className="absolute inset-0 grid-bg-light opacity-30 pointer-events-none" />
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[200px] bg-gradient-to-r from-indigo-100/40 via-purple-100/40 to-cyan-100/40 blur-[80px] pointer-events-none" />
+
+            <div className="flex flex-col gap-6 relative z-10">
                 {/* Row 1 - Scroll Left */}
                 <div className="relative flex overflow-x-hidden">
-                    <div className="animate-scroll flex space-x-8 px-4">
+                    <div className="animate-scroll flex space-x-6 px-4">
                         {[...row1, ...row1, ...row1, ...row1].map((item, idx) => (
                             <FeatureTag key={`r1-${idx}`} icon={item.icon} label={item.label} />
                         ))}
@@ -58,17 +68,17 @@ export const FeatureScroll: React.FC = () => {
 
                 {/* Row 2 - Scroll Right */}
                 <div className="relative flex overflow-x-hidden">
-                    <div className="animate-scroll-reverse flex space-x-8 px-4">
+                    <div className="animate-scroll-reverse flex space-x-6 px-4">
                         {[...row2, ...row2, ...row2, ...row2].map((item, idx) => (
                             <FeatureTag key={`r2-${idx}`} icon={item.icon} label={item.label} />
                         ))}
                     </div>
                 </div>
-             </div>
-             
-             {/* Gradient Overlays to smooth edges */}
-             <div className="pointer-events-none absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-slate-50 to-transparent z-10"></div>
-             <div className="pointer-events-none absolute inset-y-0 right-0 w-32 bg-gradient-to-l from-slate-50 to-transparent z-10"></div>
+            </div>
+
+            {/* Gradient Overlays to smooth edges */}
+            <div className="pointer-events-none absolute inset-y-0 left-0 w-40 bg-gradient-to-r from-white via-white/80 to-transparent z-20"></div>
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-40 bg-gradient-to-l from-white via-white/80 to-transparent z-20"></div>
         </section>
     );
 };

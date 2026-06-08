@@ -118,12 +118,12 @@ export const UseCases: React.FC = () => {
             </div>
         ))}
         
-        {/* Call to Action Card */}
+        {/* Build-your-own card */}
         <div className="snap-center shrink-0 w-[85vw] md:w-[400px] h-[500px] bg-slate-900 rounded-3xl p-8 flex flex-col justify-center items-center text-center relative overflow-hidden border border-slate-800">
              <div className="absolute inset-0 grid-bg-light opacity-10"></div>
-             <h3 className="text-2xl font-bold text-white mb-4 relative z-10">Have a unique use case?</h3>
-             <p className="text-slate-400 mb-8 relative z-10">Our API allows you to build custom workflows for any competition type.</p>
-             <Button variant="white" className="relative z-10">Contact Sales</Button>
+             <h3 className="text-2xl font-bold text-white mb-4 relative z-10">Need something custom?</h3>
+             <p className="text-slate-400 mb-8 relative z-10">Fork the repo, extend the plugin API, or open a discussion. Every workflow ships from the community.</p>
+             <Button variant="white" className="relative z-10">Open a Discussion</Button>
         </div>
       </div>
     </section>

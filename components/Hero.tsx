@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { ArrowRight, Play, CheckCircle2, Trophy } from 'lucide-react';
+import { ArrowRight, Play, Github, Star, GitFork } from 'lucide-react';
 import { Button } from './Button';
 import { motion, useScroll, useTransform } from 'framer-motion';
 
@@ -22,11 +22,12 @@ export const Hero: React.FC = () => {
   const [typingSpeed, setTypingSpeed] = useState(150);
 
   const phrases = [
-    "Awards & Growth", 
-    "Employee Recognition", 
-    "Creative Excellence", 
-    "Innovation Challenges"
+    "Awards Programs",
+    "Open Source Recognition",
+    "Creative Competitions",
+    "Community Hackathons"
   ];
+
 
   useEffect(() => {
     const handleTyping = () => {
@@ -80,14 +81,20 @@ export const Hero: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <div className="inline-flex items-center px-4 py-1.5 rounded-full border border-indigo-100 bg-white/80 backdrop-blur-sm text-indigo-700 text-sm font-bold tracking-wide mb-8 shadow-sm">
+            <a
+              href="https://github.com/awardx/awardx"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center px-4 py-1.5 rounded-full border border-indigo-100 bg-white/80 backdrop-blur-sm text-indigo-700 text-sm font-bold tracking-wide mb-8 shadow-sm hover:border-indigo-300 hover:shadow transition-all"
+            >
               <span className="flex h-2 w-2 mr-2 relative">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-600"></span>
               </span>
-              AWARDX V2.0 IS LIVE
-            </div>
-            
+              100% OPEN SOURCE · MIT LICENSED
+              <ArrowRight className="w-3.5 h-3.5 ml-2" />
+            </a>
+
             <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 mb-6 leading-[1.1] min-h-[3.3em] lg:min-h-[auto] font-display">
               The OS for <br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-500">
@@ -95,32 +102,45 @@ export const Hero: React.FC = () => {
                 <span className="border-r-4 border-indigo-600 ml-1 animate-pulse"></span>
               </span>
             </h1>
-            
+
             <p className="mt-4 text-lg md:text-xl text-slate-600 mb-8 leading-relaxed max-w-2xl mx-auto lg:mx-0 font-medium">
-              Launch world-class award programs, automate judging, and amplify your reach. 
-              The all-in-one platform for modern competitions.
+              The open-source award management system. Launch world-class programs,
+              automate judging, and own every byte of your data &mdash; self-host or contribute.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start space-y-4 sm:space-y-0 sm:space-x-4">
               <Button variant="primary" size="lg" className="w-full sm:w-auto font-bold shadow-indigo-500/25 rounded-full px-8">
-                Start Free Trial 
-                <ArrowRight className="ml-2 w-4 h-4" />
+                <Github className="mr-2 w-4 h-4" /> Star on GitHub
+                <span className="ml-3 pl-3 border-l border-white/20 inline-flex items-center text-xs"><Star className="w-3 h-3 mr-1 fill-current" /> 12.4k</span>
               </Button>
               <Button variant="white" size="lg" className="w-full sm:w-auto font-bold rounded-full px-8">
-                <Play className="mr-2 w-4 h-4 fill-slate-900" /> Watch Demo
+                <Play className="mr-2 w-4 h-4 fill-slate-900" /> Live Demo
               </Button>
+            </div>
+
+            {/* Glass meta strip */}
+            <div className="mt-6 inline-flex items-center gap-2 flex-wrap">
+              {['MIT License', 'TypeScript', 'Self-hosted', 'Postgres'].map((t) => (
+                <span
+                  key={t}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/50 backdrop-blur-xl border border-white/60 text-xs font-semibold text-slate-700 shadow-sm"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  {t}
+                </span>
+              ))}
             </div>
 
             <div className="mt-10 flex items-center justify-center lg:justify-start space-x-6 text-sm text-slate-500">
               <div className="flex -space-x-2">
-                {['A','B','C','D'].map((letter, i) => (
+                {['A','B','C','D'].map((_, i) => (
                   <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-gradient-to-br from-indigo-400 to-violet-500 flex items-center justify-center">
                     <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                   </div>
                 ))}
               </div>
               <div>
-                <span className="font-bold text-slate-900">2,000+</span> organizations joined AwardX
+                <span className="font-bold text-slate-900">340+</span> contributors building together
               </div>
             </div>
           </motion.div>
@@ -141,44 +161,75 @@ export const Hero: React.FC = () => {
               className="absolute inset-0 z-10"
               style={{ perspective: '1000px' }}
             >
-              <div className="w-full h-full bg-white rounded-[2rem] shadow-2xl shadow-indigo-900/10 border border-slate-200 overflow-hidden relative transform transition-transform hover:scale-[1.02] duration-500 group">
-                {/* Header */}
-                <div className="h-12 border-b border-slate-100 flex items-center px-6 gap-2 bg-slate-50/50 justify-between">
-                   <div className="flex gap-2">
-                     <div className="w-3 h-3 rounded-full bg-slate-200"></div>
-                     <div className="w-3 h-3 rounded-full bg-slate-200"></div>
-                   </div>
-                   <div className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">AWARDX DASHBOARD</div>
-                </div>
-                
-                {/* Body Content Placeholder - Abstract Dashboard */}
-                <div className="p-8 relative">
-                  
-                  <div className="flex gap-6 mb-8">
-                     <div className="w-1/3">
-                        <div className="h-3 w-16 bg-slate-100 rounded mb-3"></div>
-                        <div className="h-10 w-24 bg-slate-900 rounded-lg"></div>
-                     </div>
-                     <div className="w-1/3">
-                        <div className="h-3 w-16 bg-slate-100 rounded mb-3"></div>
-                        <div className="h-10 w-24 bg-slate-900 rounded-lg"></div>
-                     </div>
-                     <div className="w-1/3">
-                        <div className="h-3 w-16 bg-slate-100 rounded mb-3"></div>
-                        <div className="h-10 w-24 bg-indigo-600 rounded-lg shadow-lg shadow-indigo-200"></div>
-                     </div>
+              <div className="w-full h-full bg-white/70 backdrop-blur-2xl rounded-[2rem] shadow-2xl shadow-indigo-900/20 border border-white/60 overflow-hidden relative transform transition-transform hover:scale-[1.02] duration-500 group">
+                {/* Header — mirrors the real top-nav (DashboardLayout.tsx) */}
+                <div className="h-11 border-b border-slate-100/70 flex items-center px-5 gap-4 bg-white/40 backdrop-blur-xl">
+                  <div className="flex gap-1.5">
+                    <div className="w-2.5 h-2.5 rounded-full bg-red-400/70" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-amber-400/70" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-400/70" />
                   </div>
-                  <div className="h-48 w-full bg-slate-50 rounded-2xl border border-slate-100 relative overflow-hidden group-hover:border-indigo-100 transition-colors">
-                    <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-indigo-500/10 to-transparent"></div>
-                    <svg className="w-full h-full" preserveAspectRatio="none">
-                      <path d="M0,100 C150,80 300,120 450,60 C600,0 750,40 900,20 L900,200 L0,200 Z" fill="url(#gradient)" className="opacity-20"/>
-                      <defs>
-                        <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                          <stop offset="0%" stopColor="#6366f1" />
-                          <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
-                        </linearGradient>
-                      </defs>
-                    </svg>
+                  <div className="flex items-center gap-1 ml-2 overflow-hidden">
+                    {['Overview', 'Submissions', 'Judging', 'Awards'].map((label, idx) => (
+                      <span
+                        key={label}
+                        className={`text-[10px] font-semibold px-2 py-1 rounded-md ${
+                          idx === 1 ? 'bg-indigo-100 text-indigo-700' : 'text-slate-500 hover:text-slate-900'
+                        }`}
+                      >
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="ml-auto text-[9px] font-mono text-slate-400 hidden sm:flex items-center gap-1.5">
+                    <span className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200">⌘K</span>
+                  </div>
+                </div>
+
+                {/* Body — animated stats + submissions list grounded in dashboard */}
+                <div className="p-5 relative">
+                  <div className="grid grid-cols-3 gap-3 mb-4">
+                    {[
+                      { label: 'Entries', value: '1,284', tone: 'bg-slate-900 text-white' },
+                      { label: 'Pending', value: '37', tone: 'bg-amber-100 text-amber-900' },
+                      { label: 'Round', value: '2 / 4', tone: 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' },
+                    ].map((s) => (
+                      <div key={s.label} className="rounded-xl bg-white/80 backdrop-blur-xl border border-slate-100 p-2.5">
+                        <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">{s.label}</div>
+                        <div className={`text-sm font-bold rounded-md px-2 py-1 inline-block ${s.tone}`}>{s.value}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Mini submissions list with staggered shimmer */}
+                  <div className="rounded-2xl bg-white/60 backdrop-blur-xl border border-slate-100 overflow-hidden">
+                    <div className="px-3 py-2 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                      <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Recent Submissions</span>
+                      <span className="text-[9px] font-mono text-emerald-600 flex items-center gap-1">
+                        <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" /> live
+                      </span>
+                    </div>
+                    <div className="divide-y divide-slate-100/70">
+                      {[
+                        { id: 'SUB-1042', title: 'Helios Pavilion', tag: 'Submitted', tone: 'bg-emerald-100 text-emerald-700' },
+                        { id: 'SUB-1041', title: 'Quanta Engine', tag: 'In Review', tone: 'bg-amber-100 text-amber-700' },
+                        { id: 'SUB-1040', title: 'Northwind Atlas', tag: 'Advanced', tone: 'bg-indigo-100 text-indigo-700' },
+                      ].map((r, i) => (
+                        <motion.div
+                          key={r.id}
+                          initial={{ opacity: 0, x: -6 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: 0.4 + i * 0.1 }}
+                          className="px-3 py-2 flex items-center gap-2"
+                        >
+                          <div className="w-5 h-5 rounded bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-[8px] font-mono text-indigo-700 font-bold">
+                            {r.id.split('-')[1].slice(-2)}
+                          </div>
+                          <span className="text-[11px] font-medium text-slate-800 flex-1 truncate">{r.title}</span>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${r.tone}`}>{r.tag}</span>
+                        </motion.div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -186,32 +237,42 @@ export const Hero: React.FC = () => {
 
             {/* Floating Elements - Parallax */}
             <motion.div style={{ y: y2 }} className="absolute -top-10 -right-10 z-20">
-              <div className="bg-white/90 backdrop-blur-md p-5 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.1)] border border-white/50 w-52 animate-float">
+              <div className="bg-white/90 backdrop-blur-md p-5 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.1)] border border-white/50 w-56 animate-float">
                 <div className="flex items-center gap-4 mb-3">
-                  <div className="p-2.5 bg-green-100 rounded-xl text-green-600">
-                    <CheckCircle2 size={20} />
+                  <div className="p-2.5 bg-amber-100 rounded-xl text-amber-600">
+                    <Star size={20} className="fill-current" />
                   </div>
                   <div>
-                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Status</div>
-                    <div className="text-sm font-bold text-slate-900">Live</div>
+                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">GitHub Stars</div>
+                    <div className="text-sm font-bold text-slate-900">12,432 <span className="text-emerald-600 text-xs font-semibold">+128 this week</span></div>
                   </div>
                 </div>
-                <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                  <div className="bg-green-500 h-full w-full"></div>
+                <div className="flex gap-1">
+                  {[...Array(12)].map((_, i) => (
+                    <div key={i} className="flex-1 h-6 bg-gradient-to-t from-amber-400 to-amber-200 rounded-sm" style={{ opacity: 0.4 + (i / 24) }} />
+                  ))}
                 </div>
               </div>
             </motion.div>
 
             <motion.div style={{ y: y3 }} className="absolute -bottom-5 -left-5 z-30">
-              <div className="bg-white/90 backdrop-blur-md p-5 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.1)] border border-white/50 w-64 animate-float animation-delay-2000">
-                <div className="flex items-center gap-4">
-                  <div className="p-2.5 bg-purple-100 rounded-xl text-purple-600">
-                    <Trophy size={20} />
+              <div className="bg-white/70 backdrop-blur-2xl p-4 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.1)] border border-white/60 w-64 animate-float animation-delay-2000">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl text-white shadow-md">
+                    <GitFork size={16} />
                   </div>
-                  <div>
-                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Top Candidate</div>
-                    <div className="text-sm font-bold text-slate-900">Sarah Jenkins</div>
+                  <div className="flex-1">
+                    <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Round 2 · Jury</div>
+                    <div className="text-[11px] font-bold text-slate-900">12 of 24 scored</div>
                   </div>
+                </div>
+                <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: '50%' }}
+                    transition={{ duration: 1.2, delay: 0.8, ease: 'easeOut' }}
+                    className="h-full bg-gradient-to-r from-indigo-500 to-purple-500"
+                  />
                 </div>
               </div>
             </motion.div>

@@ -10,6 +10,7 @@ const FeaturesPage = lazy(() => import('./components/pages/FeaturesPage').then((
 const HowItWorksPage = lazy(() => import('./components/pages/HowItWorksPage').then((m) => ({ default: m.HowItWorksPage })));
 const StoriesPage = lazy(() => import('./components/pages/StoriesPage').then((m) => ({ default: m.StoriesPage })));
 const PricingPage = lazy(() => import('./components/pages/PricingPage').then((m) => ({ default: m.PricingPage })));
+const DocsPage = lazy(() => import('./components/pages/DocsPage').then((m) => ({ default: m.DocsPage })));
 const SignupPage = lazy(() => import('./components/pages/SignupPage').then((m) => ({ default: m.SignupPage })));
 const LoginPage = lazy(() => import('./components/pages/LoginPage').then((m) => ({ default: m.LoginPage })));
 const Dashboard = lazy(() => import('./components/dashboard/Dashboard').then((m) => ({ default: m.Dashboard })));
@@ -71,6 +72,7 @@ const pageToPath = (page: string): string => {
     'how-it-works': '/how-it-works',
     stories: '/stories',
     pricing: '/pricing',
+    docs: '/docs',
     workflow: '/workflow',
     demo: '/demo',
     dashboard: '/dashboard',
@@ -90,6 +92,7 @@ const pathToPage = (pathname: string): string => {
   if (pathname.startsWith('/how-it-works')) return 'how-it-works';
   if (pathname.startsWith('/stories')) return 'stories';
   if (pathname.startsWith('/pricing')) return 'pricing';
+  if (pathname.startsWith('/docs')) return 'docs';
   if (pathname.startsWith('/workflow')) return 'workflow';
   if (pathname.startsWith('/login')) return 'login';
   if (pathname.startsWith('/signup')) return 'signup';
@@ -216,6 +219,22 @@ const App: React.FC = () => {
           element={
             <MarketingLayout>
               <PricingPage />
+            </MarketingLayout>
+          }
+        />
+        <Route
+          path="/docs"
+          element={
+            <MarketingLayout>
+              <DocsPage />
+            </MarketingLayout>
+          }
+        />
+        <Route
+          path="/docs/:section"
+          element={
+            <MarketingLayout>
+              <DocsPage />
             </MarketingLayout>
           }
         />
