@@ -8,6 +8,8 @@ import {
   EdgeCondition,
 } from '../types/scheduleRounds';
 import { criteriaToShortlistConfig, shortlistConfigToCriteria } from '../lib/roundScheduleUtils';
+import { isDemoMode } from './demoMode';
+import * as demoDb from './demoDatabase';
 
 // Convert database round to scheduleRounds Round type
 export function dbRoundToScheduleRound(dbRound: any): Round {
@@ -195,6 +197,8 @@ function scheduleRoundEdgeToDb(edge: RoundEdge) {
 
 export const scheduleRoundsService = {
   async getRounds(programId: string): Promise<Round[]> {
+    if (isDemoMode()) return demoDb.getDemoScheduleRounds(programId);
+
     try {
       const response = await fetchBackendJson<{ data: any[] }>(
         `/api/schedule-rounds/${encodeURIComponent(programId)}/rounds`,
@@ -302,6 +306,8 @@ export const scheduleRoundsService = {
   },
 
   async getEdges(programId: string): Promise<RoundEdge[]> {
+    if (isDemoMode()) return demoDb.getDemoScheduleEdges(programId);
+
     const response = await fetchBackendJson<{ data: any[] }>(
       `/api/schedule-rounds/${encodeURIComponent(programId)}/edges`,
       {

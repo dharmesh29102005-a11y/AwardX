@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Category } from '../../services/models';
 import { layoutCategoryTree } from '../../lib/categoryHierarchy';
 import { ZoomIn, ZoomOut, X, Maximize2, Plus, Trash2 } from 'lucide-react';
@@ -60,6 +60,31 @@ export const CategoriesWorkflow: React.FC<WorkflowProps> = ({ categories, onAddS
         [categories],
     );
 
+    const fitCanvasToNodes = useCallback(() => {
+        if (!containerRef.current || nodes.length === 0) return;
+
+        const NODE_W = 250;
+        const NODE_H = 90;
+        const minX = Math.min(...nodes.map((n) => n.x));
+        const maxX = Math.max(...nodes.map((n) => n.x + NODE_W));
+        const minY = Math.min(...nodes.map((n) => n.y));
+        const maxY = Math.max(...nodes.map((n) => n.y + NODE_H));
+        const contentW = Math.max(maxX - minX, NODE_W);
+        const contentH = Math.max(maxY - minY, NODE_H);
+        const pad = 56;
+        const cw = containerRef.current.clientWidth;
+        const ch = containerRef.current.clientHeight;
+        const fitScale = Math.min(1.1, (cw - pad * 2) / contentW, (ch - pad * 2) / contentH);
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+
+        setScale(fitScale);
+        setOffset({
+            x: cw / 2 - centerX * fitScale,
+            y: ch / 2 - centerY * fitScale,
+        });
+    }, [nodes]);
+
     useEffect(() => {
         if (!categories.length) {
             setNodes([]);
@@ -71,6 +96,16 @@ export const CategoriesWorkflow: React.FC<WorkflowProps> = ({ categories, onAddS
         setNodes(layoutNodes);
         setEdges(layoutEdges);
     }, [programId, categorySignature, categories]);
+
+    useEffect(() => {
+        const handler = (e: Event) => {
+            if ((e as CustomEvent).detail === 'awards-fit-canvas') {
+                window.requestAnimationFrame(() => fitCanvasToNodes());
+            }
+        };
+        window.addEventListener('demo-action', handler);
+        return () => window.removeEventListener('demo-action', handler);
+    }, [fitCanvasToNodes]);
 
     // Handlers
     const handleNodeMouseDown = (e: React.MouseEvent, node: Node) => {
@@ -229,6 +264,7 @@ export const CategoriesWorkflow: React.FC<WorkflowProps> = ({ categories, onAddS
     return (
         <div
             ref={containerRef}
+            data-demo-target="awards-workflow-canvas"
             className={`
                 bg-slate-50 relative overflow-hidden transition-all duration-300 group select-none shadow-inner
                 ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}
@@ -298,6 +334,7 @@ export const CategoriesWorkflow: React.FC<WorkflowProps> = ({ categories, onAddS
                 {nodes.map(node => (
                     <div
                         key={node.id}
+                        data-demo-target={node.id === 'cat-1' ? 'awards-category-node-1' : undefined}
                         className="absolute"
                         style={{
                             transform: `translate(${node.x}px, ${node.y}px)`,

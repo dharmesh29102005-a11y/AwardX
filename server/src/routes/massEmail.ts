@@ -278,14 +278,14 @@ router.post('/:programId/rounds/:roundId/send', requireAuth, async (req: Authent
 <tr><td align="center" style="padding:40px 20px;">
 <table role="presentation" width="560" style="max-width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1);">
 <tr><td style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:28px 40px;text-align:center;">
-<h1 style="margin:0;font-size:22px;font-weight:700;color:#fff;">AwardX</h1>
+<img src="https://www.awardx.one/logo.png" alt="" height="44" style="height:44px;width:auto;display:block;margin:0 auto 8px;" />
 <p style="margin:6px 0 0;font-size:13px;color:rgba(255,255,255,.8);">${escapeHtml(program.title)}</p>
 </td></tr>
 <tr><td style="padding:36px 40px;">
 <div style="font-size:15px;line-height:1.75;color:#334155;">${personalizedBody.replace(/\n/g, '<br/>')}</div>
 </td></tr>
 <tr><td style="background:#f8fafc;padding:20px 40px;border-top:1px solid #e2e8f0;text-align:center;">
-<p style="margin:0;font-size:11px;color:#94a3b8;">Sent by AwardX on behalf of ${escapeHtml(program.title)}</p>
+<p style="margin:0;font-size:11px;color:#94a3b8;">Sent on behalf of ${escapeHtml(program.title)}</p>
 </td></tr>
 </table></td></tr></table>
 </body></html>`;

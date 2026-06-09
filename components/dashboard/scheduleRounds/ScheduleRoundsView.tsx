@@ -97,6 +97,17 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
   const [roundInsights, setRoundInsights] = useState<Record<string, RoundCardInsight>>({});
   const [isInsightsLoading, setIsInsightsLoading] = useState(false);
   const [advancementModal, setAdvancementModal] = useState<AdvancementModalState | null>(null);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail === 'schedule-select-first-round' && rounds.length > 0) {
+        setSelectedRoundId(rounds[0].id);
+      }
+    };
+    window.addEventListener('demo-action', handler);
+    return () => window.removeEventListener('demo-action', handler);
+  }, [rounds]);
   const [addRoundOpen, setAddRoundOpen] = useState(false);
   const [isCreatingRound, setIsCreatingRound] = useState(false);
   const customEdgeWarningShown = useRef(false);
@@ -680,7 +691,12 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
               Convert to block diagram
             </Button>
           )}
-          <Button variant="primary" onClick={openAddRoundSheet} className="shadow-lg shadow-indigo-500/20">
+          <Button
+            variant="primary"
+            onClick={openAddRoundSheet}
+            className="shadow-lg shadow-indigo-500/20"
+            data-demo-target="schedule-add-round"
+          >
             <Plus className="w-4 h-4 mr-2" />
             Add round
           </Button>
@@ -694,7 +710,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
         </div>
       )}
 
-      <div className="flex-1 min-w-0 overflow-hidden">
+      <div className="flex-1 min-w-0 overflow-hidden" data-demo-target="schedule-page-canvas">
         {representation === 'workflow' ? (
           <WorkflowView
             rounds={rounds}

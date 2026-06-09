@@ -10,6 +10,8 @@ import {
   useReducedMotion,
 } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { GITHUB_REPO } from '@/lib/brand';
+import { Logo } from './Logo';
 
 // ── Brand marks ──────────────────────────────────────────────────────────────
 // Inline SVGs traced from each brand's public mark. Kept monochrome where the
@@ -264,12 +266,22 @@ export const Hero: React.FC = () => {
             <OrbitTile key={n.label} node={n} parallaxX={mx} parallaxY={my} />
           ))}
 
+          {/* Brand mark */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45 }}
+            className="flex justify-center mb-8"
+          >
+            <Logo size="home" />
+          </motion.div>
+
           {/* Eyebrow */}
           <motion.a
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
-            href="https://github.com/Cognivo25/AwardX"
+            href={GITHUB_REPO}
             target="_blank"
             rel="noreferrer"
             className="group mx-auto mb-7 flex w-fit items-center gap-2.5 rounded-full border border-slate-200 bg-white/80 backdrop-blur-sm px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:border-slate-300 hover:shadow-md transition-all"
@@ -339,7 +351,7 @@ export const Hero: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => navigate('/demo')}
+              onClick={() => navigate('/demo?autoplay=1')}
               className="group inline-flex items-center gap-2 rounded-2xl bg-white border border-slate-200 px-7 py-3.5 text-[15px] font-semibold text-slate-900 shadow-sm hover:border-slate-300 hover:bg-slate-50 transition-colors"
             >
               <span className="relative flex h-2 w-2">
@@ -424,7 +436,7 @@ export const Hero: React.FC = () => {
             <div className="relative">
               <img
                 src="/hero-dashboard.png"
-                alt="AwardX events dashboard showing program tiles and key metrics"
+                alt="Events dashboard showing program tiles and key metrics"
                 className="block w-full h-auto select-none"
                 draggable={false}
               />

@@ -404,7 +404,7 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
   const selectedRound = rounds.find(r => r.id === selectedRoundId);
 
   return (
-    <div className="relative w-full h-full bg-slate-50 group">
+    <div className="relative w-full h-full bg-slate-50 group" data-demo-target="schedule-workflow-canvas">
       <style>{`
             @keyframes flow {
                to {

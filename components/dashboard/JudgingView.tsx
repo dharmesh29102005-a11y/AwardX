@@ -66,6 +66,17 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    const [groupCount, setGroupCount] = useState(5);
    const [autoAssignLoading, setAutoAssignLoading] = useState(false);
 
+   useEffect(() => {
+      const handler = (e: Event) => {
+         const detail = (e as CustomEvent).detail;
+         if (detail === 'judging-panel-tab') {
+            setActiveTab('panel');
+         }
+      };
+      window.addEventListener('demo-action', handler);
+      return () => window.removeEventListener('demo-action', handler);
+   }, []);
+
    // ── React Query data fetching ──────────────────────────────────────────────
    const { data: judges = [], isLoading: judgesLoading } = useQuery({
       queryKey: queryKeys.judges.all(activeEvent?.id ?? ''),
@@ -638,7 +649,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
       )}
 
       {activeTab === 'panel' && (
-         <div className="space-y-6">
+         <div className="space-y-6" data-demo-target="judging-panel-area">
             {judgesLoading && (
                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {[1, 2, 3].map(i => <SkeletonLoader key={i} className="h-48" />)}
@@ -713,6 +724,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                               size="sm"
                               variant="outline"
                               className="flex items-center justify-center gap-2 w-full sm:w-auto"
+                              data-demo-target="judging-add-judge"
                                  onClick={() => {
                                     setAddJudgeTargetGroup(null);
                                     setEditJudge(null);
@@ -735,8 +747,12 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                       </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-               {paginatedJudges.map((judge) => (
-                  <div key={judge.id} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow group">
+               {paginatedJudges.map((judge, judgeIndex) => (
+                  <div
+                     key={judge.id}
+                     data-demo-target={judgeIndex === 0 ? 'judging-judge-card-1' : undefined}
+                     className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow group"
+                  >
                      <div className="flex justify-between items-start mb-6">
                         <div className="flex items-center gap-4">
                            {judge.avatar ? (

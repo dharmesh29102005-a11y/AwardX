@@ -27,7 +27,7 @@ const tiers: PricingTier[] = [
       "Unlimited Judges",
       "WhatsApp Campaigns",
       "Multi-round Judging",
-      "Remove AwardX Branding",
+      "Remove Platform Branding",
       "Priority Support"
     ]
   },

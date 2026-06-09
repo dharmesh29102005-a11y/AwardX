@@ -887,7 +887,7 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
             : 'w-0 max-h-0 xl:max-h-none opacity-0 pointer-events-none'
         }`}
       >
-        <div className="flex h-full w-full xl:w-72 flex-col border-b border-slate-200 bg-white shadow-xl shadow-slate-200/50 xl:border-b-0 xl:border-r">
+        <div className="flex h-full w-full xl:w-72 flex-col border-b border-slate-200 bg-white shadow-xl shadow-slate-200/50 xl:border-b-0 xl:border-r" data-demo-target="form-elements-panel">
         <div className="flex items-center justify-between border-b border-slate-100 p-5">
           <h2 className="flex items-center gap-2 text-lg font-bold text-slate-800">
             <Layout className="h-5 w-5 text-indigo-600" />
@@ -1008,7 +1008,7 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                   </div>
 
         {/* Builder Area */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 relative">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 relative" data-demo-target="form-preview-canvas">
           {renderEditCanvas()}
                     </div>
                   </div>

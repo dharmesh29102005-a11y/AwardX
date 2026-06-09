@@ -61,6 +61,7 @@ interface NavigationMenuFourProps {
   searchValue?: string
   onSearchChange?: (value: string) => void
   onToggleLive?: () => void
+  publishDemoTarget?: string
   onBackToHub?: () => void
   onOpenMobileMenu?: () => void
   notifications?: NotificationItem[]
@@ -116,6 +117,7 @@ export default function NavigationMenuFour({
   searchValue = "",
   onSearchChange,
   onToggleLive,
+  publishDemoTarget,
   onBackToHub,
   onOpenMobileMenu,
   notifications = [],
@@ -406,6 +408,7 @@ export default function NavigationMenuFour({
 
         <div className="flex shrink-0 items-center gap-2">
           <Toggle
+            data-demo-target={publishDemoTarget}
             pressed={isLive}
             onPressedChange={onToggleLive}
             className={cn(

@@ -11,6 +11,7 @@ import { db as databaseService, type DashboardNotification } from '../../service
 import { Modal } from '../Modal';
 import { Button } from '../Button';
 import { AppDatePicker } from '../ui/AppDateFields';
+import { Logo, LogoTitle } from '../Logo';
 
 interface UserData {
    name: string;
@@ -539,16 +540,8 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
       <div className="min-h-screen bg-[#f8faf9] font-sans text-slate-900">
          {/* Top Navigation Bar */}
          <header className="bg-white/95 backdrop-blur border-b border-slate-200 sticky top-0 z-30">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex justify-between items-center">
-               <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 bg-emerald-600 rounded-lg flex items-center justify-center shadow-sm shadow-emerald-200/60">
-                     <Sparkles className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                     <span className="font-display text-xl font-semibold text-slate-900">AwardX</span>
-                     <p className="text-[11px] text-slate-500 -mt-0.5">{activeOrganization.name}</p>
-                  </div>
-               </div>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-24 flex justify-between items-center">
+               <LogoTitle title={activeOrganization.name} logoSize="xl" />
 
                <div className="flex items-center gap-4">
                   <button
@@ -1002,7 +995,7 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
          >
             <form onSubmit={handleAddMember} className="space-y-4">
                <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-800">
-                  Add an existing AwardX user to <span className="font-semibold">{activeOrganization.name}</span> and choose their role.
+                  Add an existing platform user to <span className="font-semibold">{activeOrganization.name}</span> and choose their role.
                </div>
                <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1">Email Address</label>
@@ -1093,7 +1086,7 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
                <div className="bg-emerald-50 p-4 rounded-xl text-sm text-emerald-800 flex gap-3 items-start mt-4 border border-emerald-100">
                   <Sparkles className="w-5 h-5 shrink-0 mt-0.5 text-emerald-700" />
                   <p>
-                     AwardX will automatically configure the workspace for a <strong>{selectedType}</strong> workflow, including optimal judging rounds based on research from {selectedType ? WORKFLOW_HINTS[selectedType] || 'industry best practices' : 'industry best practices'}.
+                     The platform will automatically configure the workspace for a <strong>{selectedType}</strong> workflow, including optimal judging rounds based on research from {selectedType ? WORKFLOW_HINTS[selectedType] || 'industry best practices' : 'industry best practices'}.
                   </p>
                </div>
                <div className="pt-6 flex justify-end gap-3">

@@ -158,7 +158,7 @@ export const TileView: React.FC<TileViewProps> = ({
   };
 
   return (
-    <div className="h-full overflow-y-auto p-6 bg-slate-50">
+    <div className="h-full overflow-y-auto p-6 bg-slate-50" data-demo-target="schedule-tiles-canvas">
       {items.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-full text-center">
           <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
@@ -200,6 +200,7 @@ export const TileView: React.FC<TileViewProps> = ({
                 key={round.id}
                 value={round}
                 className="bg-white rounded-xl border-2 border-slate-200 p-5 shadow-sm hover:shadow-md transition-all cursor-pointer"
+                data-demo-target={round.id === 'round-1' ? 'schedule-tile-round-1' : undefined}
                 onClick={() => onRoundSelect(round.id)}
               >
                 <div className="flex items-start gap-4">

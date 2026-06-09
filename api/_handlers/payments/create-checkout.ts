@@ -151,7 +151,7 @@ export default async function handler(req: any, res: any) {
         amount,
         currency: (currency || paymentConfig.currency || 'INR').toUpperCase(),
         keyId: razorpayKeyId,
-        name: 'AwardX Submission Fee',
+        name: 'Submission Fee',
         description: submission.title || 'Program submission',
         prefill: {},
         notes: { submissionId, programId },
@@ -180,7 +180,7 @@ export default async function handler(req: any, res: any) {
             currency: (currency || paymentConfig.currency || 'USD').toLowerCase(),
             unit_amount: amount,
             product_data: {
-              name: 'AwardX Submission Fee',
+              name: 'Submission Fee',
               description: submission.title || 'Program submission',
             },
           },

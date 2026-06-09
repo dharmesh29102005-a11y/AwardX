@@ -131,7 +131,10 @@ const CategoryCard: React.FC<CategoryCardProps> = ({ category, allCategories, on
    const children = allCategories.filter(c => c.parentId === category.id);
 
    return (
-      <div className="border border-slate-200 rounded-xl bg-white overflow-hidden shadow-sm hover:shadow-md transition-all">
+      <div
+         className="border border-slate-200 rounded-xl bg-white overflow-hidden shadow-sm hover:shadow-md transition-all"
+         data-demo-target={category.id === 'cat-1' ? 'awards-category-card-1' : undefined}
+      >
          <div className="p-4 flex items-center justify-between border-b border-slate-50 bg-slate-50/50">
             <div className="flex items-center gap-3">
                <input
@@ -387,7 +390,7 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
                   </Button>
                )}
 
-               <Button className="flex items-center gap-2" onClick={() => openModal('')}>
+               <Button className="flex items-center gap-2" onClick={() => openModal('')} data-demo-target="awards-add-category">
                   <Plus className="w-4 h-4" /> Add Root Category
                </Button>
             </div>,
@@ -416,7 +419,7 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
                )}
 
                {viewMode === 'list' && (
-                  <div className="space-y-8 pb-12">
+                  <div className="space-y-8 pb-12" data-demo-target="awards-list-view">
                      <div>
                         <h1 className="text-2xl font-bold text-slate-900">Awards & Categories</h1>
                         <p className="text-slate-500">Structure your event into categories and subcategories.</p>

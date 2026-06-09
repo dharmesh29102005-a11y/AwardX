@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, Sparkles, LayoutDashboard, LogOut, Github } from 'lucide-react';
+import { Menu, X, LayoutDashboard, LogOut, Github } from 'lucide-react';
 import { Button } from './Button';
+import { Logo } from './Logo';
+import { GITHUB_REPO } from '@/lib/brand';
 import { motion, useScroll } from 'framer-motion';
 import { db } from '../services/database';
 import { Contact } from '../services/models';
@@ -136,13 +138,9 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
           {/* Logo */}
           <button
             onClick={() => handleNavClick('home')}
-            className="relative flex items-center gap-2 pl-2 pr-3 py-1 rounded-full hover:bg-white/40 transition-colors"
+            className="relative flex items-center pl-2 pr-3 py-1 rounded-full hover:bg-white/40 transition-colors"
           >
-            <div className="relative w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-md shadow-indigo-500/30">
-              <Sparkles className="w-3.5 h-3.5 text-white" />
-              <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-white/30 to-transparent" />
-            </div>
-            <span className="hidden sm:inline text-sm font-bold tracking-tight text-slate-900 font-display">AwardX</span>
+            <Logo size="lg" />
           </button>
 
           {/* Divider pill */}
@@ -206,7 +204,7 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
             ) : (
               <>
                 <a
-                  href="https://github.com/Cognivo25/AwardX"
+                  href={GITHUB_REPO}
                   target="_blank"
                   rel="noreferrer"
                   className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-semibold text-slate-700 hover:bg-white/50 rounded-full transition-colors border border-white/30"
@@ -290,7 +288,7 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
                   <LayoutDashboard className="w-4 h-4 mr-2" /> Open Demo
                 </Button>
                 <a
-                  href="https://github.com/Cognivo25/AwardX"
+                  href={GITHUB_REPO}
                   target="_blank"
                   rel="noreferrer"
                   className="flex items-center justify-center gap-2 text-sm font-medium text-slate-700 px-4 py-2 rounded-lg border border-slate-200 bg-white"

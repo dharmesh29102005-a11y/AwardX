@@ -127,7 +127,7 @@ export default async function handler(req: any, res: any) {
       from: mailer.from,
       to: normalizedEmail,
       subject,
-      text: `Hi ${judgeName},\n\nYou have been invited to judge for the upcoming event.\n\nEvent: ${programTitle}\nRole: Judge${deadlineText ? `\nDeadline: ${deadlineText}` : ''}\n\nClick the link below to access your judging portal and view the assigned submissions:\n${actionUrl}\n\nYou can bookmark this link to return to your portal at any time during the judging period.\n\nBest,\nThe AwardX team`,
+      text: `Hi ${judgeName},\n\nYou have been invited to judge for the upcoming event.\n\nEvent: ${programTitle}\nRole: Judge${deadlineText ? `\nDeadline: ${deadlineText}` : ''}\n\nClick the link below to access your judging portal and view the assigned submissions:\n${actionUrl}\n\nYou can bookmark this link to return to your portal at any time during the judging period.\n\nBest,\nThe team`,
       html: `<!doctype html>
 <html>
   <head>
@@ -144,7 +144,7 @@ export default async function handler(req: any, res: any) {
             <!-- Header -->
             <tr>
               <td style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:32px 40px;text-align:center;">
-                <h1 style="margin:0;font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">AwardX</h1>
+                <img src="https://www.awardx.one/logo.png" alt="" height="44" style="height:44px;width:auto;display:block;margin:0 auto 8px;" />
               </td>
             </tr>
             <!-- Body -->
@@ -186,14 +186,14 @@ export default async function handler(req: any, res: any) {
                   </p>
                 </div>
 
-                <p style="margin:24px 0 0;font-size:15px;line-height:1.6;color:#334155;">Best regards,<br /><strong>The AwardX Team</strong></p>
+                <p style="margin:24px 0 0;font-size:15px;line-height:1.6;color:#334155;">Best regards,<br /><strong>The Team</strong></p>
               </td>
             </tr>
             <!-- Footer -->
             <tr>
               <td style="background:#f8fafc;padding:24px 40px;border-top:1px solid #e2e8f0;">
                 <p style="margin:0;font-size:12px;line-height:1.5;color:#94a3b8;text-align:center;">
-                  This email was sent by AwardX on behalf of the program organizer.<br />
+                  This email was sent on behalf of the program organizer.<br />
                   470 Noor Ave STE B #1148, South San Francisco, CA 94080
                 </p>
               </td>

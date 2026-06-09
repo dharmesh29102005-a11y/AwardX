@@ -26,6 +26,8 @@ import { Program, Organization, Category, Round, Submission, Judge, JudgeGroup, 
 import { getTemplateConfig } from './templateRoundConfigs';
 import { normalizeIntegrationSources } from '../lib/programIntegrations';
 import { PageConfig, PageSection, Sponsor, FAQ, TimelineMilestone } from '../types/overviewPage';
+import { isDemoMode } from './demoMode';
+import * as demoDb from './demoDatabase';
 
 export interface PaginatedResult<T> {
   items: T[];
@@ -475,6 +477,16 @@ class DatabaseService {
 
   // Initialize and get current organization
   async initialize() {
+    if (isDemoMode()) {
+      const demoState = demoDb.getDemoState();
+      this.currentOrgId = demoState.organization.id;
+      this.currentProgramId = demoState.program.id;
+      this.cachedRoleName = 'Admin';
+      this.cachedPermissions = new Set(['all']);
+      this.permissionsLoaded = true;
+      return { org: demoState.organization, error: null };
+    }
+
     try {
       const { user } = await auth.getUser();
       if (user) {
@@ -519,6 +531,8 @@ class DatabaseService {
   }
 
   async getUserOrganizations(): Promise<Organization[]> {
+    if (isDemoMode()) return demoDb.getDemoUserOrganizations();
+
     const { data, error } = await organizations.listForUser();
     if (error || !data) return [];
     return data.map((org: any) => this.mapOrganization(org));
@@ -535,6 +549,14 @@ class DatabaseService {
   }
 
   async setActiveOrganization(orgId: string) {
+    if (isDemoMode()) {
+      this.currentOrgId = orgId;
+      this.cachedRoleName = 'Admin';
+      this.cachedPermissions = new Set(['all']);
+      this.permissionsLoaded = true;
+      return;
+    }
+
     this.currentOrgId = orgId;
     setSupabaseActiveOrganization(orgId);
     this.currentProgramId = null;
@@ -591,6 +613,12 @@ class DatabaseService {
 
   async setActiveProgram(programId: string | null) {
     this.currentProgramId = programId;
+    if (isDemoMode()) {
+      this.cachedRoleName = 'Admin';
+      this.cachedPermissions = new Set(['all']);
+      this.permissionsLoaded = true;
+      return;
+    }
     await this.refreshPermissionCache();
   }
 
@@ -772,12 +800,16 @@ class DatabaseService {
 
   // Programs
   async getPrograms(): Promise<Program[]> {
+    if (isDemoMode()) return demoDb.getDemoPrograms();
+
     const { data, error } = await supabasePrograms.getAll();
     if (error || !data) return [];
     return data.map((p: any) => this.mapProgram(p));
   }
 
   async getProgramById(id: string): Promise<Program | undefined> {
+    if (isDemoMode()) return demoDb.getDemoProgramById(id);
+
     const { data, error } = await supabasePrograms.getById(id);
     if (error || !data) return undefined;
     return this.mapProgram(data);
@@ -921,6 +953,10 @@ class DatabaseService {
   }
 
   async updateProgram(program: Program) {
+    if (isDemoMode()) {
+      return demoDb.updateDemoProgram(program);
+    }
+
     await this.requireProgramManageAccess();
 
     const { data, error } = await supabasePrograms.update(program.id, {
@@ -1143,6 +1179,8 @@ class DatabaseService {
 
   // Categories (via backend API — avoids client RLS failures on direct inserts)
   async getCategories(programId: string): Promise<Category[]> {
+    if (isDemoMode()) return demoDb.getDemoCategories(programId);
+
     try {
       const response = await fetchBackendJson<{ data: any[] }>(
         `/api/programs/${encodeURIComponent(programId)}/categories`,
@@ -1252,6 +1290,8 @@ class DatabaseService {
 
   // Rounds
   async getRounds(programId: string): Promise<Round[]> {
+    if (isDemoMode()) return demoDb.getDemoRounds(programId);
+
     if (!supabase) return [];
 
     const { data, error } = await supabase
@@ -1346,6 +1386,10 @@ class DatabaseService {
 
     if (!options?.programId) {
       return { items: [], total: 0, page, pageSize, hasMore: false };
+    }
+
+    if (isDemoMode()) {
+      return demoDb.getDemoSubmissionsPaginated(options);
     }
 
     const params = new URLSearchParams({
@@ -1655,6 +1699,8 @@ class DatabaseService {
 
   // Judges
   async getJudges(programId?: string): Promise<Judge[]> {
+    if (isDemoMode()) return demoDb.getDemoJudges(programId);
+
     const { data, error } = await judges.getAll(programId);
     if (error || !data) return [];
 
@@ -1972,6 +2018,8 @@ class DatabaseService {
   }
 
   async getJudgeGroups(programId: string): Promise<JudgeGroup[]> {
+    if (isDemoMode()) return demoDb.getDemoJudgeGroups(programId);
+
     if (!programId) return [];
     const { data, error } = await judgeGroups.getAll(programId);
     if (error || !data) return [];
@@ -2070,6 +2118,8 @@ class DatabaseService {
 
   // Roles
   async getRoles(programId?: string): Promise<Role[]> {
+    if (isDemoMode()) return demoDb.getDemoRoles();
+
     const { data, error } = await roles.getAll(programId);
     if (error || !data) return [];
 
@@ -2142,6 +2192,8 @@ class DatabaseService {
 
   // Team members (organization_members)
   async getTeamMembers(programId?: string): Promise<TeamMember[]> {
+    if (isDemoMode()) return demoDb.getDemoTeamMembers(programId);
+
     const { data, error } = await team.getMembers(programId);
     if (error || !data) return [];
 
@@ -2192,6 +2244,8 @@ class DatabaseService {
 
   // Audit logs
   async getLogs(): Promise<Log[]> {
+    if (isDemoMode()) return demoDb.getDemoLogs();
+
     const { data, error } = await auditLogs.getAll({ limit: 100 });
     if (error || !data) return [];
 
@@ -2279,6 +2333,8 @@ class DatabaseService {
     limit?: number;
     unreadOnly?: boolean;
   }): Promise<DashboardNotification[]> {
+    if (isDemoMode()) return demoDb.getDemoNotifications();
+
     if (!supabase) return [];
 
     try {
@@ -2447,6 +2503,8 @@ class DatabaseService {
 
   // Forms
   async getForms(programId: string) {
+    if (isDemoMode()) return demoDb.getDemoForms(programId);
+
     try {
       const response = await fetchBackendJson<{ data: any[] }>(
         `/api/program-forms/${encodeURIComponent(programId)}`,
@@ -2463,6 +2521,8 @@ class DatabaseService {
   }
 
   async getFormFields(formId: string) {
+    if (isDemoMode()) return demoDb.getDemoFormFields(formId);
+
     const { data, error } = await forms.getFields(formId);
     if (error || !data) return [];
     return data;
@@ -2690,6 +2750,27 @@ class DatabaseService {
 
   // Stats
   async getStats(programId?: string) {
+    if (isDemoMode()) {
+      return {
+        totalSubmissions: 10,
+        activePrograms: 1,
+        pendingReview: 3,
+        revenue: 0,
+        activeJudges: 4,
+        submissionTrend: [
+          { date: 'Mar 12', count: 1 },
+          { date: 'Mar 15', count: 2 },
+          { date: 'Mar 18', count: 3 },
+          { date: 'Mar 21', count: 4 },
+        ],
+        categorySplit: [
+          { name: 'Science & Research', value: 3 },
+          { name: 'Product Design', value: 2 },
+          { name: 'Social Impact', value: 2 },
+        ],
+      };
+    }
+
     if (!supabase) {
       return {
         totalSubmissions: 0,
@@ -2823,6 +2904,8 @@ class DatabaseService {
 
   // Current User (from auth)
   async getCurrentUser(): Promise<any | null> {
+    if (isDemoMode()) return demoDb.getDemoCurrentUser();
+
     const { user } = await auth.getUser();
     if (!user) return null;
 
@@ -3330,6 +3413,8 @@ class DatabaseService {
   }
 
   async getActiveFormForProgram(programId: string): Promise<string | null> {
+    if (isDemoMode()) return demoDb.getDemoActiveFormForProgram(programId);
+
     try {
       const response = await fetchBackendJson<{ data: { active_form_id: string | null } }>(
         `/api/schedule-rounds/${encodeURIComponent(programId)}/active-form`,
@@ -3424,6 +3509,8 @@ class DatabaseService {
   }
 
   hasPermission(permission: string): boolean {
+    if (isDemoMode()) return true;
+
     const roleName = (this.cachedRoleName || '').toLowerCase();
     if (roleName === 'admin' || roleName === 'owner' || roleName === 'superadmin') return true;
 

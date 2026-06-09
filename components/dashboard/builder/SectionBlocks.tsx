@@ -23,7 +23,7 @@ export const sectionDefs: SectionDef[] = [
         label: 'Hero Section',
         icon: LayoutTemplate,
         defaultContent: {
-            title: 'AMS AwardX 2026',
+            title: 'AMS Awards 2026',
             subtitle: 'Celebrating Innovation, Excellence & Impact Across Industries',
             date: 'October 24-26, 2026',
             location: 'Grand Convention Center, New Delhi',
@@ -47,9 +47,9 @@ export const sectionDefs: SectionDef[] = [
         label: 'About Event',
         icon: Info,
         defaultContent: {
-            title: 'About AMS AwardX',
+            title: 'About AMS Awards',
             lead: 'A premier recognition platform designed to honor outstanding achievements across technology, business, innovation, and social impact.',
-            description: '<p>AMS AwardX is designed for students, startups, corporates, and innovators. What makes it unique is our comprehensive evaluation framework and global network of mentors.</p>',
+            description: '<p>AMS Awards is designed for students, startups, corporates, and innovators. What makes it unique is our comprehensive evaluation framework and global network of mentors.</p>',
             image: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&q=80&w=2069'
         },
         defaultSettings: {
@@ -269,7 +269,7 @@ export const sectionDefs: SectionDef[] = [
         label: 'Navigation Bar',
         icon: LayoutTemplate,
         defaultContent: {
-            logo_text: 'AMS AwardX',
+            logo_text: 'AMS Awards',
             logo_url: '',
             links: [
                 { label: 'About', url: '#about' },
@@ -1065,7 +1065,7 @@ export const DEFAULT_TEMPLATE = [
         type: 'navbar',
         label: 'Navigation Bar',
         content: {
-            logo_text: 'AMS AwardX',
+            logo_text: 'AMS Awards',
             links: [
                 { label: 'About', url: '#about' },
                 { label: 'Highlights', url: '#highlights' },
@@ -1081,7 +1081,7 @@ export const DEFAULT_TEMPLATE = [
         type: 'hero',
         label: 'Hero Section',
         content: {
-            title: 'AMS AwardX 2026',
+            title: 'AMS Awards 2026',
             subtitle: 'Celebrating Innovation, Excellence & Impact Across Industries',
             date: 'October 24-26, 2026',
             location: 'Grand Convention Center, New Delhi',
@@ -1096,9 +1096,9 @@ export const DEFAULT_TEMPLATE = [
         type: 'about',
         label: 'About Event',
         content: {
-            title: 'About AMS AwardX',
+            title: 'About AMS Awards',
             lead: 'A premier recognition platform designed to honor outstanding achievements across technology, business, innovation, and social impact.',
-            description: '<p>AMS AwardX is designed for students, startups, corporates, and innovators. What makes it unique is our comprehensive evaluation framework and global network of mentors.</p>',
+            description: '<p>AMS Awards is designed for students, startups, corporates, and innovators. What makes it unique is our comprehensive evaluation framework and global network of mentors.</p>',
             image: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&q=80&w=2069'
         },
         settings: { layout: 'split_right', backgroundColor: 'white' }
@@ -1267,7 +1267,7 @@ export const DEFAULT_TEMPLATE = [
         type: 'navbar',
         label: 'Navigation Bar',
         content: {
-            logo_text: 'AMS AwardX',
+            logo_text: 'AMS Awards',
             links: [
                 { label: 'About', url: '#about' },
                 { label: 'Timeline', url: '#timeline' },

@@ -361,7 +361,7 @@ export const MassEmailView: React.FC<MassEmailViewProps> = ({ activeEvent }) => 
             />
             <textarea
               rows={8}
-              placeholder={`Hi {{name}},\n\nCongratulations! You have qualified to Round {{round_title}} with submission "{{submission_title}}".\n\nYou are {{rank}} among {{total}} in the {{segment}} group.\n\nBest,\nThe AwardX Team`}
+              placeholder={`Hi {{name}},\n\nCongratulations! You have qualified to Round {{round_title}} with submission "{{submission_title}}".\n\nYou are {{rank}} among {{total}} in the {{segment}} group.\n\nBest,\nThe Team`}
               value={template}
               onChange={(e) => setTemplate(e.target.value)}
               className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"

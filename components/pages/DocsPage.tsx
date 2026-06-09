@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import MiniSearch from 'minisearch';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Logo } from '../Logo';
 import {
   Search,
   Book,
@@ -50,14 +51,14 @@ type DocSection = {
 const sections: DocSection[] = [
   {
     id: 'introduction',
-    title: 'What is AwardX',
+    title: 'Introduction',
     category: 'Getting Started',
     icon: Book,
     description: 'A workspace for running awards programs end-to-end — entry, judging, voting, and announcement.',
     blocks: [
       {
         kind: 'p',
-        text: 'AwardX is a multi-tenant awards management system. You create an organization, spin up one or more programs inside it, configure how submissions are collected and judged, then run the program from intake to winner announcement in the same dashboard.',
+        text: 'This platform is a multi-tenant awards management system. You create an organization, spin up one or more programs inside it, configure how submissions are collected and judged, then run the program from intake to winner announcement in the same dashboard.',
       },
       {
         kind: 'p',
@@ -86,7 +87,7 @@ const sections: DocSection[] = [
     icon: Layers,
     description: 'How the frontend, API server, scheduler, and Supabase backend fit together.',
     blocks: [
-      { kind: 'p', text: 'AwardX is a single TypeScript repository. The browser app, the Node API, and the serverless route handlers all live alongside each other, and Supabase provides Postgres, auth, storage, and realtime.' },
+      { kind: 'p', text: 'This is a single TypeScript repository. The browser app, the Node API, and the serverless route handlers all live alongside each other, and Supabase provides Postgres, auth, storage, and realtime.' },
       { kind: 'h3', text: 'Top-level layout' },
       {
         kind: 'table',
@@ -115,7 +116,7 @@ const sections: DocSection[] = [
   },
   {
     id: 'getting-started',
-    title: 'Run AwardX locally',
+    title: 'Run locally',
     category: 'Getting Started',
     icon: Zap,
     description: 'Clone, install, point at Supabase, and run the app + API together.',
@@ -192,7 +193,7 @@ npm --prefix server run dev  # Express API (http://localhost:5001)`,
     icon: Database,
     description: 'Plain SQL migrations against Supabase Postgres, with RLS as the primary authorization gate.',
     blocks: [
-      { kind: 'p', text: 'AwardX uses raw SQL migration files committed to supabase/migrations/. There is no ORM — the frontend uses the Supabase JS client and the API server uses @supabase/supabase-js with the service-role key.' },
+      { kind: 'p', text: 'The platform uses raw SQL migration files committed to supabase/migrations/. There is no ORM — the frontend uses the Supabase JS client and the API server uses @supabase/supabase-js with the service-role key.' },
       { kind: 'h3', text: 'Migration workflow' },
       {
         kind: 'code',
@@ -240,7 +241,7 @@ npx supabase gen types typescript --project-id YOUR_PROJECT_ID \\
     icon: Shield,
     description: 'Supabase Auth for sign-in, custom role tables for what each user can do.',
     blocks: [
-      { kind: 'p', text: 'Sign-in is handled entirely by Supabase Auth. AwardX supports email + password and OAuth providers (Google, GitHub, LinkedIn). The session JWT travels with every Supabase request and is forwarded to the Express API as a bearer token.' },
+      { kind: 'p', text: 'Sign-in is handled entirely by Supabase Auth. The platform supports email + password and OAuth providers (Google, GitHub, LinkedIn). The session JWT travels with every Supabase request and is forwarded to the Express API as a bearer token.' },
       { kind: 'h3', text: 'Built-in roles' },
       {
         kind: 'table',
@@ -346,7 +347,7 @@ npx supabase gen types typescript --project-id YOUR_PROJECT_ID \\
     icon: Workflow,
     description: 'Compose evaluation as a graph of rounds with explicit start/end conditions.',
     blocks: [
-      { kind: 'p', text: 'A program’s evaluation can be a single round or a graph of rounds connected by edges. AwardX ships two equivalent editors: a tile view for linear flows and a React Flow graph view for branching workflows.' },
+      { kind: 'p', text: 'A program’s evaluation can be a single round or a graph of rounds connected by edges. The platform ships two equivalent editors: a tile view for linear flows and a React Flow graph view for branching workflows.' },
       { kind: 'h3', text: 'What a round configures' },
       {
         kind: 'list',
@@ -417,7 +418,7 @@ npx supabase gen types typescript --project-id YOUR_PROJECT_ID \\
     icon: Mail,
     description: 'Resend-backed transactional and bulk email to applicants, judges, and team members.',
     blocks: [
-      { kind: 'p', text: 'AwardX uses Resend for outbound email. You can connect Resend at the organization level (covers every program) or per program (overrides the org connection for that program).' },
+      { kind: 'p', text: 'The platform uses Resend for outbound email. You can connect Resend at the organization level (covers every program) or per program (overrides the org connection for that program).' },
       {
         kind: 'list',
         items: [
@@ -434,7 +435,7 @@ npx supabase gen types typescript --project-id YOUR_PROJECT_ID \\
     title: 'Integrations',
     category: 'Extending',
     icon: Mail,
-    description: 'External services AwardX talks to today.',
+    description: 'External services the platform talks to today.',
     blocks: [
       {
         kind: 'list',
@@ -462,7 +463,7 @@ npx supabase gen types typescript --project-id YOUR_PROJECT_ID \\
     icon: Code2,
     description: 'How the dashboard, the Express server, and the serverless handlers fit together.',
     blocks: [
-      { kind: 'p', text: 'There are three pieces of API surface in the repo. Most of what you build on top of AwardX will hit one of them; pick based on whether the call is privileged, public, or bursty.' },
+      { kind: 'p', text: 'There are three pieces of API surface in the repo. Most of what you build on top of the platform will hit one of them; pick based on whether the call is privileged, public, or bursty.' },
       {
         kind: 'table',
         headers: ['Surface', 'Where', 'When to use'],
@@ -490,7 +491,7 @@ curl -X POST "$API_BASE_URL/api/execution/rounds/ROUND_ID/advance" \\
   },
   {
     id: 'deployment',
-    title: 'Deploying AwardX',
+    title: 'Deploying',
     category: 'Deployment',
     icon: Settings,
     description: 'How the repo is wired up for hosting today.',
@@ -751,14 +752,14 @@ export const DocsPage: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white pt-28 pb-24">
       {/* Page header */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-12">
-        <div className="flex items-center gap-2 text-xs font-bold tracking-widest uppercase text-indigo-600 mb-4">
-          <BookOpen className="w-4 h-4" /> AwardX Docs
+        <div className="flex items-center gap-3 text-xs font-bold tracking-widest uppercase text-indigo-600 mb-4">
+          <BookOpen className="w-4 h-4" /> <Logo size="xs" /> Docs
         </div>
         <h1 className="text-4xl md:text-6xl font-bold text-slate-900 font-display tracking-tight mb-4">
           Documentation
         </h1>
         <p className="text-lg text-slate-600 max-w-2xl">
-          How AwardX is structured, how to run it locally, and how to extend it.
+          How the platform is structured, how to run it locally, and how to extend it.
           Written against the current codebase — not a roadmap.
         </p>
 

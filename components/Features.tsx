@@ -506,7 +506,7 @@ export const Features: React.FC = () => {
             transition={{ delay: 0.1 }}
             className="text-lg text-slate-600 leading-relaxed"
           >
-            Every card below is a real view inside the AwardX dashboard &mdash; not a roadmap promise.
+            Every card below is a real view inside the dashboard &mdash; not a roadmap promise.
             Hover any tile to see the live UI fragment shipped in <code className="text-sm bg-slate-200/60 px-1.5 py-0.5 rounded font-mono text-slate-700">apps/web</code>.
           </motion.p>
         </div>

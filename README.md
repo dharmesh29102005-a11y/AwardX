@@ -1,8 +1,10 @@
 <p align="center">
-  <img src="public/hero-dashboard.png" alt="AwardX dashboard" width="720" />
+  <img src="public/logo.png" alt="" width="360" />
 </p>
 
-<h1 align="center">AwardX</h1>
+<p align="center">
+  <img src="public/hero-dashboard.png" alt="Dashboard preview" width="720" />
+</p>
 
 <p align="center">
   <strong>Open-source awards management — from submissions to judging to winner announcement.</strong>
@@ -25,7 +27,7 @@
 
 ---
 
-AwardX is a multi-tenant platform for running awards programs end to end. Create an organization, launch programs, collect entries, run multi-round judging, open public voting, and announce winners — all from one dashboard.
+This is a multi-tenant platform for running awards programs end to end. Create an organization, launch programs, collect entries, run multi-round judging, open public voting, and announce winners — all from one dashboard.
 
 Built in public and designed to be **self-hosted**: clone the repo, point it at your own Supabase project, and run your awards on your infrastructure.
 
@@ -119,7 +121,7 @@ cp .env.example .env
 | Variable | Purpose |
 | --- | --- |
 | `RESEND_API_KEY` | Send judge, team, and applicant emails |
-| `RESEND_FROM` | From address, e.g. `AwardX <no-reply@yourdomain.com>` |
+| `RESEND_FROM` | From address, e.g. `Platform <no-reply@yourdomain.com>` |
 | `VITE_BACKEND_PROXY_TARGET` | Express URL for the Vite dev proxy (default `http://localhost:5001`) |
 | `REDIS_URL` | Redis cache for the API (optional; falls back to in-memory) |
 
@@ -186,7 +188,7 @@ Create an account via the signup page. Supabase Auth handles sign-in (email/pass
 ## Project structure
 
 ```
-AwardX/
+/
 ├── components/          # React UI — marketing pages and dashboard
 ├── server/              # Express API (Node 20+, port 5001)
 ├── api/                 # Vercel serverless route handlers
@@ -201,7 +203,7 @@ AwardX/
 
 ## Deployment
 
-AwardX splits cleanly across three deploy targets:
+The platform splits cleanly across three deploy targets:
 
 1. **Frontend** — `npm run build`, then host `dist/` on any static host (Vercel, Netlify, Cloudflare Pages).
 2. **Serverless handlers** — The `api/` folder is picked up automatically on Vercel (`vercel.json` at the repo root).
@@ -237,7 +239,7 @@ npm run test:e2e
 
 ## Contributing
 
-Contributions are welcome. AwardX is built in public — issues, bug reports, and pull requests help make it better for everyone running awards programs.
+Contributions are welcome. The project is built in public — issues, bug reports, and pull requests help make it better for everyone running awards programs.
 
 1. **Fork** the repository and create a branch from `main`.
 2. **Set up** a local environment following [Quick start](#quick-start).
@@ -249,13 +251,13 @@ For larger changes (new round types, schema changes, payment flows), open an iss
 
 ## Roadmap & use cases
 
-AwardX supports a wide range of program types — design awards, hackathons, academic admissions, fellowships, abstract submissions, and more. See [`workflow_readmes/`](workflow_readmes/) for workflow-specific notes.
+The platform supports a wide range of program types — design awards, hackathons, academic admissions, fellowships, abstract submissions, and more. See [`workflow_readmes/`](workflow_readmes/) for workflow-specific notes.
 
 ## License
 
 This project is open source under the [GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE).
 
-If you modify AwardX and run it as a network service (for example, a hosted SaaS instance), AGPL-3.0 requires you to make the corresponding source code of your modified version available to users who interact with it over the network.
+If you modify this software and run it as a network service (for example, a hosted SaaS instance), AGPL-3.0 requires you to make the corresponding source code of your modified version available to users who interact with it over the network.
 
 ---
 

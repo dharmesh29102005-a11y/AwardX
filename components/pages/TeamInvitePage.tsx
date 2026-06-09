@@ -248,7 +248,7 @@ export const TeamInvitePage: React.FC = () => {
                 <p className="text-sm text-slate-500">
                   You have been invited to join{' '}
                   <span className="font-semibold text-indigo-600">
-                    {invite?.organizationName || 'an AwardX team'}
+                    {invite?.organizationName || 'a team'}
                   </span>
                   .
                 </p>

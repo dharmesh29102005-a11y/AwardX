@@ -149,7 +149,7 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
-    const subject = `AwardX invite: ${programTitle}`;
+    const subject = `Team invite: ${programTitle}`;
     const roleLine = roleName ? `Assigned role: ${roleName}` : 'Assigned role: Team member';
     const siteUrl = (process.env.SITE_URL || process.env.VITE_SITE_URL || 'https://awardstuff.vercel.app').replace(/\/$/, '');
     const resolvedInviteUrl = resolveSafeInviteUrl(siteUrl, inviteUrl, inviteRow.token);
@@ -210,7 +210,7 @@ export default async function handler(req: any, res: any) {
       from: mailer.from,
       to: normalizedEmail,
       subject,
-      text: `The AwardX team for ${programTitle} wants you to join this event.\n${roleLine}\nAccept your invite: ${resolvedInviteUrl}`,
+      text: `The team for ${programTitle} wants you to join this event.\n${roleLine}\nAccept your invite: ${resolvedInviteUrl}`,
       html: `<!doctype html>
 <html>
   <head>
@@ -227,7 +227,7 @@ export default async function handler(req: any, res: any) {
             <!-- Header -->
             <tr>
               <td style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:32px 40px;text-align:center;">
-                <h1 style="margin:0;font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">AwardX</h1>
+                <img src="https://www.awardx.one/logo.png" alt="" height="44" style="height:44px;width:auto;display:block;margin:0 auto 8px;" />
               </td>
             </tr>
             <!-- Body -->
@@ -237,7 +237,7 @@ export default async function handler(req: any, res: any) {
                 
                 <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#334155;">Hi,</p>
                 <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#334155;">
-                  ${inviterProfile?.full_name ? `<strong>${escapeHtml(inviterProfile.full_name)}</strong>` : 'An administrator'} has invited you to join the team on AwardX. Please review the details of the invitation below:
+                  ${inviterProfile?.full_name ? `<strong>${escapeHtml(inviterProfile.full_name)}</strong>` : 'An administrator'} has invited you to join the team on the platform. Please review the details of the invitation below:
                 </p>
 
                 <!-- Info Grid -->
@@ -264,14 +264,14 @@ export default async function handler(req: any, res: any) {
                   <a href="${resolvedInviteUrl}" style="background:#4f46e5;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;padding:14px 32px;border-radius:8px;display:inline-block;box-shadow:0 2px 4px rgba(79,70,229,0.3);">Accept Team Invite</a>
                 </div>
 
-                <p style="margin:24px 0 0;font-size:15px;line-height:1.6;color:#334155;">Best regards,<br /><strong>The AwardX Team</strong></p>
+                <p style="margin:24px 0 0;font-size:15px;line-height:1.6;color:#334155;">Best regards,<br /><strong>The Team</strong></p>
               </td>
             </tr>
             <!-- Footer -->
             <tr>
               <td style="background:#f8fafc;padding:24px 40px;border-top:1px solid #e2e8f0;">
                 <p style="margin:0;font-size:12px;line-height:1.5;color:#94a3b8;text-align:center;">
-                  This email was sent by AwardX on behalf of the program organizer.<br />
+                  This email was sent on behalf of the program organizer.<br />
                   470 Noor Ave STE B #1148, South San Francisco, CA 94080
                 </p>
               </td>

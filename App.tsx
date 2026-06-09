@@ -14,6 +14,7 @@ const DocsPage = lazy(() => import('./components/pages/DocsPage').then((m) => ({
 const SignupPage = lazy(() => import('./components/pages/SignupPage').then((m) => ({ default: m.SignupPage })));
 const LoginPage = lazy(() => import('./components/pages/LoginPage').then((m) => ({ default: m.LoginPage })));
 const Dashboard = lazy(() => import('./components/dashboard/Dashboard').then((m) => ({ default: m.Dashboard })));
+const DemoDashboard = lazy(() => import('./components/demo/DemoDashboard').then((m) => ({ default: m.DemoDashboard })));
 const AuthCallback = lazy(() => import('./components/AuthCallback').then((m) => ({ default: m.AuthCallback })));
 const WorkflowPage = lazy(() => import('./components/pages/WorkflowPage').then((m) => ({ default: m.WorkflowPage })));
 const FormSubmissionPage = lazy(() => import('./components/pages/FormSubmissionPage').then((m) => ({ default: m.FormSubmissionPage })));
@@ -74,7 +75,7 @@ const pageToPath = (page: string): string => {
     pricing: '/pricing',
     docs: '/docs',
     workflow: '/workflow',
-    demo: '/demo',
+    demo: '/demo?autoplay=1',
     dashboard: '/dashboard',
     login: '/login',
     signup: '/signup',
@@ -274,19 +275,7 @@ const App: React.FC = () => {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/demo"
-          element={
-            <ProtectedRoute>
-              <Dashboard
-                onLogout={async () => {
-                  await auth.signOut();
-                  navigate('/');
-                }}
-              />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/demo" element={<DemoDashboard />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>

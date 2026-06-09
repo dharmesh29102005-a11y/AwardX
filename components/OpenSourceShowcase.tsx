@@ -9,6 +9,8 @@ import {
   ShieldCheck,
   Cog,
 } from 'lucide-react';
+import { Logo } from './Logo';
+import { GITHUB_REPO } from '@/lib/brand';
 
 // Numbers grounded in the actual repo at the time of writing:
 //   supabase/migrations/   → 30 SQL migrations
@@ -177,7 +179,7 @@ export const OpenSourceShowcase: React.FC = () => {
             transition={{ delay: 0.1 }}
             className="text-lg text-slate-400 leading-relaxed"
           >
-            AwardX is developed in public on GitHub. Every API route, every SQL migration,
+            The platform is developed in public on GitHub. Every API route, every SQL migration,
             every dashboard view sits in the same repo &mdash; auditable, forkable, and yours to run.
           </motion.p>
         </div>
@@ -226,12 +228,12 @@ export const OpenSourceShowcase: React.FC = () => {
         >
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
             <div>
-              <h3 className="text-2xl font-bold text-white mb-2 font-display">Cognivo25/AwardX</h3>
+              <Logo size="2xl" className="mb-3" />
               <p className="text-slate-400 text-sm">Open issues, file a pull request, or read the migration history straight on GitHub.</p>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
               <a
-                href="https://github.com/Cognivo25/AwardX"
+                href={GITHUB_REPO}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-white text-slate-900 text-sm font-bold hover:bg-slate-100 transition-colors shadow-lg"
@@ -239,7 +241,7 @@ export const OpenSourceShowcase: React.FC = () => {
                 <Github className="w-4 h-4" /> View repo
               </a>
               <a
-                href="https://github.com/Cognivo25/AwardX/issues"
+                href={`${GITHUB_REPO}/issues`}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-white/10 text-white text-sm font-bold hover:bg-white/15 transition-colors border border-white/15"

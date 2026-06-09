@@ -4,7 +4,7 @@ import { Testimonials } from '../Testimonials';
 import { Button } from '../Button';
 import { Film, GraduationCap, Building2, Palette, Heart } from 'lucide-react';
 
-const CaseStudy = ({ title, industry, description, stats, quote, author, color }: any) => (
+const CaseStudy = ({ title, industry, description, stats, quote, author, color, partnerLogo }: any) => (
   <motion.div 
     initial={{ opacity: 0, y: 30 }}
     whileInView={{ opacity: 1, y: 0 }}
@@ -15,6 +15,9 @@ const CaseStudy = ({ title, industry, description, stats, quote, author, color }
        <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-10 rounded-full blur-[50px] -translate-y-1/2 translate-x-1/2 group-hover:scale-110 transition-transform duration-700"></div>
        <div>
          <span className="inline-block px-3 py-1 rounded-full bg-white/20 backdrop-blur-sm text-xs font-bold tracking-widest uppercase mb-4">{industry}</span>
+         {partnerLogo && (
+           <img src={partnerLogo} alt="" className="h-16 w-auto object-contain mb-5 rounded-lg" draggable={false} />
+         )}
          <h3 className="text-3xl font-bold font-display leading-tight">{title}</h3>
        </div>
        <div className="mt-12 space-y-4">
@@ -67,17 +70,31 @@ export const StoriesPage: React.FC = () => {
       <section className="text-center max-w-4xl mx-auto px-4 mb-20">
         <h1 className="text-5xl md:text-6xl font-bold text-slate-900 mb-6 font-display">Stories from Our Community</h1>
         <p className="text-xl text-slate-600">
-          How organizers across industries use AwardX to run seamless, high-impact programs.
+          How organizers across industries use the platform to run seamless, high-impact programs.
         </p>
       </section>
 
       {/* Featured Case Studies */}
       <section className="max-w-7xl mx-auto px-4 space-y-12 mb-32">
+        <CaseStudy
+          title="Global Tamil Awards"
+          industry="Cultural Awards · THE RISE"
+          color="from-violet-700 via-purple-700 to-amber-600"
+          partnerLogo="/partners/global-tamil-awards.png"
+          description="Global Tamil Awards — presented by THE RISE — previously ran on a patchwork of legacy award platforms and manual workflows. Vendor fees, per-entry charges, and slow judging cycles made each season expensive and operationally fragile compared with modern SaaS competitors."
+          quote="We replaced our incumbent stack and cut total program cost to one-sixth of what we were paying — while delivering faster judging turnaround, a smoother applicant experience, and public voting performance that beat every existing vendor we benchmarked."
+          author="Dr. K. Venkatesh, Program Director · Global Tamil Awards"
+          stats={[
+            { value: '1/6', label: 'Total program cost vs. prior vendors' },
+            { value: '3×', label: 'Faster judging cycle' },
+          ]}
+        />
+
         <CaseStudy 
           title="Scaling the Indie Film Awards"
           industry="Film Festival"
           color="from-rose-500 to-orange-500"
-          description="The IFA faced a logistical nightmare managing 4,000+ video files via Dropbox and email. Judging took 3 months. AwardX streamlined the entire ingestion pipeline."
+          description="The IFA faced a logistical nightmare managing 4,000+ video files via Dropbox and email. Judging took 3 months. The platform streamlined the entire ingestion pipeline."
           quote="We cut our administrative time by 70% in the first year alone. The playback engine for judges is flawless."
           author="Marcus Thorne, Festival Director"
           stats={[
@@ -103,7 +120,7 @@ export const StoriesPage: React.FC = () => {
           title="NextGen Art Scholarship"
           industry="Education"
           color="from-emerald-500 to-teal-500"
-          description="A university grant program struggled with messy paper applications. AwardX digitized the process and added a public voting round to engage students."
+          description="A university grant program struggled with messy paper applications. The platform digitized the process and added a public voting round to engage students."
           quote="The public voting gallery went viral on campus. We had 50,000 votes in a week."
           author="Dr. Elena Rodriguez, Dean of Arts"
           stats={[

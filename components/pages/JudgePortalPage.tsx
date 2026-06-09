@@ -20,6 +20,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { JudgeScoringModal } from '../dashboard/JudgeScoringModal';
+import { Logo } from '../Logo';
 import { Submission, JudgingCriterion } from '../../services/models';
 
 interface JudgeInfo {
@@ -307,7 +308,7 @@ export const JudgePortalPage: React.FC = () => {
             </div>
             <div>
               <h2 className="text-2xl font-bold tracking-tight text-slate-900">Judge Invitation</h2>
-              <p className="text-sm text-slate-500">{organization || 'AwardX'}</p>
+              <p className="text-sm text-slate-500">{organization || 'Judging Portal'}</p>
             </div>
           </div>
 
@@ -374,11 +375,8 @@ export const JudgePortalPage: React.FC = () => {
       <header className="bg-white/95 backdrop-blur border-b border-slate-200 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-emerald-600 rounded-lg flex items-center justify-center shadow-sm shadow-emerald-200/60">
-              <Sparkles className="w-5 h-5 text-white" />
-            </div>
+            <Logo size="lg" />
             <div>
-              <span className="font-display text-xl font-semibold text-slate-900">AwardX</span>
               <p className="text-[11px] text-slate-500 -mt-0.5">
                 {organization ? `${organization} · Judging Portal` : 'Judging Portal'}
               </p>
@@ -699,7 +697,7 @@ export const JudgePortalPage: React.FC = () => {
         </motion.section>
 
         <div className="mt-12 pb-8 text-center text-sm text-slate-500">
-          Powered by <strong className="font-display text-slate-700">AwardX</strong> · Questions? Contact the program organizer.
+          Powered by <Logo size="xs" className="inline-flex align-middle mx-1" /> · Questions? Contact the program organizer.
         </div>
       </main>
     </div>

@@ -5,6 +5,7 @@ const HOLD_MS = 550;
 
 interface HoldToggleNavItemProps {
   navId: string;
+  demoTarget?: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   currentView: string;
@@ -16,6 +17,7 @@ interface HoldToggleNavItemProps {
 
 export const HoldToggleNavItem: React.FC<HoldToggleNavItemProps> = ({
   navId,
+  demoTarget,
   label,
   icon: Icon,
   currentView,
@@ -82,6 +84,7 @@ export const HoldToggleNavItem: React.FC<HoldToggleNavItemProps> = ({
     >
       <button
         type="button"
+        data-demo-target={demoTarget || `nav-${navId}`}
         onClick={handleClick}
         onPointerDown={(e) => {
           if (!isActive || collapsed) return;

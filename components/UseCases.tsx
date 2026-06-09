@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { Camera, Code, Mic2, Palette, Rocket, ArrowRight, ArrowLeft } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from './Button';
+import { Logo } from './Logo';
 
 const cases = [
   {
@@ -60,7 +61,7 @@ export const UseCases: React.FC = () => {
         <div>
           <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6 tracking-tight font-display">Built for <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">Every Industry</span></h2>
           <p className="text-lg text-slate-500 max-w-2xl">
-            AwardX adapts to your specific needs, whether you're running a local art show or a global tech summit.
+            The platform adapts to your specific needs, whether you're running a local art show or a global tech summit.
           </p>
         </div>
         
@@ -97,7 +98,7 @@ export const UseCases: React.FC = () => {
                         <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30">
                             <item.icon className="w-6 h-6 text-white" />
                         </div>
-                        <span className="text-xs font-bold tracking-widest uppercase opacity-70 border border-white/30 px-3 py-1 rounded-full">AwardX {item.category}</span>
+                        <span className="text-xs font-bold tracking-widest uppercase opacity-70 border border-white/30 px-3 py-1 rounded-full">{item.category}</span>
                     </div>
 
                     <div>
@@ -112,8 +113,8 @@ export const UseCases: React.FC = () => {
                 </div>
 
                 {/* Branding Watermark */}
-                <div className="absolute -bottom-4 -right-4 text-6xl font-black text-white opacity-10 select-none pointer-events-none rotate-[-10deg] font-display">
-                    AWARDX
+                <div className="absolute -bottom-4 -right-4 opacity-10 select-none pointer-events-none rotate-[-10deg]">
+                    <Logo size="2xl" />
                 </div>
             </div>
         ))}

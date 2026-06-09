@@ -10,6 +10,7 @@ import { auth } from '../../services/supabase';
 import { db as databaseService } from '../../services/database';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
+import { Logo, LogoTitle } from '../Logo';
 
 interface JudgeInviteRow {
   judgeId: string;
@@ -179,16 +180,8 @@ export const OrganizationSelectionView: React.FC<OrganizationSelectionViewProps>
   return (
     <div className="min-h-screen bg-[#f8faf9] font-sans text-slate-900">
       <header className="bg-white/95 backdrop-blur border-b border-slate-200 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-emerald-600 rounded-lg flex items-center justify-center shadow-sm shadow-emerald-200/60">
-              <Sparkles className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <span className="font-display text-xl font-semibold text-slate-900">AwardX</span>
-              <p className="text-[11px] text-slate-500 -mt-0.5">Organization Console</p>
-            </div>
-          </div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-24 flex justify-between items-center">
+          <LogoTitle title="Organization Console" logoSize="xl" />
 
           <div className="flex items-center gap-4">
             <div className="hidden md:flex relative">

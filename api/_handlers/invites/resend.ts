@@ -132,7 +132,7 @@ export default async function handler(req: any, res: any) {
       const inviteUrl = `${siteUrl}/team-invite/${rotatedToken}`;
       const programTitle = (inviteRow as any).programs?.title || programTitleFallback || 'your workspace';
       const roleName = (inviteRow as any).roles?.name || 'Team member';
-      const subject = `AwardX invite: ${programTitle}`;
+      const subject = `Team invite: ${programTitle}`;
 
       let deadlineText = '';
       const programDeadline = (inviteRow as any).programs?.deadline;
@@ -177,7 +177,7 @@ export default async function handler(req: any, res: any) {
         from: mailer.from,
         to: inviteRow.email,
         subject,
-        text: `The AwardX team for ${programTitle} wants you to join this event.\nAssigned role: ${roleName}\nAccept your invite: ${inviteUrl}`,
+        text: `The team for ${programTitle} wants you to join this event.\nAssigned role: ${roleName}\nAccept your invite: ${inviteUrl}`,
         html: `<!doctype html>
 <html>
   <head>
@@ -194,7 +194,7 @@ export default async function handler(req: any, res: any) {
             <!-- Header -->
             <tr>
               <td style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:32px 40px;text-align:center;">
-                <h1 style="margin:0;font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">AwardX</h1>
+                <img src="https://www.awardx.one/logo.png" alt="" height="44" style="height:44px;width:auto;display:block;margin:0 auto 8px;" />
               </td>
             </tr>
             <!-- Body -->
@@ -204,7 +204,7 @@ export default async function handler(req: any, res: any) {
                 
                 <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#334155;">Hi,</p>
                 <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#334155;">
-                  ${inviterProfile?.full_name ? `<strong>${escapeHtml(inviterProfile.full_name)}</strong>` : 'An administrator'} has invited you to join the team on AwardX. Please review the details of the invitation below:
+                  ${inviterProfile?.full_name ? `<strong>${escapeHtml(inviterProfile.full_name)}</strong>` : 'An administrator'} has invited you to join the team on the platform. Please review the details of the invitation below:
                 </p>
 
                 <!-- Info Grid -->
@@ -231,14 +231,14 @@ export default async function handler(req: any, res: any) {
                   <a href="${inviteUrl}" style="background:#4f46e5;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;padding:14px 32px;border-radius:8px;display:inline-block;box-shadow:0 2px 4px rgba(79,70,229,0.3);">Accept Team Invite</a>
                 </div>
 
-                <p style="margin:24px 0 0;font-size:15px;line-height:1.6;color:#334155;">Best regards,<br /><strong>The AwardX Team</strong></p>
+                <p style="margin:24px 0 0;font-size:15px;line-height:1.6;color:#334155;">Best regards,<br /><strong>The Team</strong></p>
               </td>
             </tr>
             <!-- Footer -->
             <tr>
               <td style="background:#f8fafc;padding:24px 40px;border-top:1px solid #e2e8f0;">
                 <p style="margin:0;font-size:12px;line-height:1.5;color:#94a3b8;text-align:center;">
-                  This email was sent by AwardX on behalf of the program organizer.<br />
+                  This email was sent on behalf of the program organizer.<br />
                   470 Noor Ave STE B #1148, South San Francisco, CA 94080
                 </p>
               </td>
@@ -363,7 +363,7 @@ export default async function handler(req: any, res: any) {
       from: judgeMailer.from,
       to: judgeRow.email,
       subject,
-      text: `Hi ${judgeName},\n\nYou have been invited to judge for the upcoming event.\n\nEvent: ${programTitle}\nRole: Judge${deadlineText ? `\nDeadline: ${deadlineText}` : ''}\n\nClick the link below to access your judging portal and view the assigned submissions:\n${inviteUrl}\n\nYou can bookmark this link to return to your portal at any time during the judging period.\n\nBest,\nThe AwardX team`,
+      text: `Hi ${judgeName},\n\nYou have been invited to judge for the upcoming event.\n\nEvent: ${programTitle}\nRole: Judge${deadlineText ? `\nDeadline: ${deadlineText}` : ''}\n\nClick the link below to access your judging portal and view the assigned submissions:\n${inviteUrl}\n\nYou can bookmark this link to return to your portal at any time during the judging period.\n\nBest,\nThe team`,
       html: `<!doctype html>
 <html>
   <head>
@@ -380,7 +380,7 @@ export default async function handler(req: any, res: any) {
             <!-- Header -->
             <tr>
               <td style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:32px 40px;text-align:center;">
-                <h1 style="margin:0;font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">AwardX</h1>
+                <img src="https://www.awardx.one/logo.png" alt="" height="44" style="height:44px;width:auto;display:block;margin:0 auto 8px;" />
               </td>
             </tr>
             <!-- Body -->
@@ -422,14 +422,14 @@ export default async function handler(req: any, res: any) {
                   </p>
                 </div>
 
-                <p style="margin:24px 0 0;font-size:15px;line-height:1.6;color:#334155;">Best regards,<br /><strong>The AwardX Team</strong></p>
+                <p style="margin:24px 0 0;font-size:15px;line-height:1.6;color:#334155;">Best regards,<br /><strong>The Team</strong></p>
               </td>
             </tr>
             <!-- Footer -->
             <tr>
               <td style="background:#f8fafc;padding:24px 40px;border-top:1px solid #e2e8f0;">
                 <p style="margin:0;font-size:12px;line-height:1.5;color:#94a3b8;text-align:center;">
-                  This email was sent by AwardX on behalf of the program organizer.<br />
+                  This email was sent on behalf of the program organizer.<br />
                   470 Noor Ave STE B #1148, South San Francisco, CA 94080
                 </p>
               </td>

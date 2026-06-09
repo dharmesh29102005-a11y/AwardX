@@ -551,7 +551,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
    };
 
    return (
-      <div className="flex h-full min-h-0 w-full flex-col gap-4 px-4 pb-6 pt-4 lg:px-6">
+      <div data-demo-target="demo-submissions-table" className="flex h-full min-h-0 w-full flex-col gap-4 px-4 pb-6 pt-4 lg:px-6">
          {ConfirmDialogNode}
          {/* Header */}
          <div className="flex shrink-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -744,13 +744,14 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                            </td>
                         </tr>
                      )}
-                     {!isLoading && submissions.map((sub) => {
+                     {!isLoading && submissions.map((sub, rowIndex) => {
                         const responses = getSubmissionResponses(sub);
                         const selected = selectedIds.includes(sub.id);
                         const rowBg = selected ? 'bg-indigo-50/60' : 'bg-white';
                         return (
                         <tr
                            key={sub.id}
+                           data-demo-target={rowIndex === 0 ? 'demo-submission-row-1' : undefined}
                            className={`group border-b border-slate-50 transition-all hover:bg-slate-50/70 ${selected ? 'bg-indigo-50/50' : ''}`}
                         >
                            <td className={`p-5 text-center sticky left-0 z-10 ${rowBg} group-hover:bg-slate-50/95`}>

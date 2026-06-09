@@ -23,6 +23,7 @@ export const AwardsNavItem: React.FC<AwardsNavItemProps> = ({
 }) => (
   <HoldToggleNavItem
     navId="awards"
+    demoTarget="nav-awards"
     label={label}
     icon={icon}
     currentView={currentView}

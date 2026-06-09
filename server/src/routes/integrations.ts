@@ -600,7 +600,7 @@ router.post('/resend/provision', requireAuth, async (req: AuthenticatedRequest, 
     }
 
     const resend = new Resend(bootstrapKey);
-    const keyName = `AwardX — ${domainName || 'integration'}`;
+    const keyName = `Platform — ${domainName || 'integration'}`;
     const { data: createdKey, error: createError } = await resend.apiKeys.create({
       name: keyName,
       permission: 'sending_access',
@@ -609,7 +609,7 @@ router.post('/resend/provision', requireAuth, async (req: AuthenticatedRequest, 
 
     if (createError || !createdKey?.token) {
       return res.status(400).json({
-        error: createError?.message || 'Failed to create Resend API key for AwardX',
+        error: createError?.message || 'Failed to create Resend API key',
       });
     }
 
@@ -647,7 +647,7 @@ router.post('/resend/connect', requireAuth, async (req: AuthenticatedRequest, re
 
     const apiKey = typeof req.body?.apiKey === 'string' ? req.body.apiKey.trim() : '';
     const fromEmail = typeof req.body?.fromEmail === 'string' ? req.body.fromEmail.trim() : '';
-    const fromName = typeof req.body?.fromName === 'string' ? req.body.fromName.trim() : 'AwardX';
+    const fromName = typeof req.body?.fromName === 'string' ? req.body.fromName.trim() : 'Platform';
     const domainName = typeof req.body?.domainName === 'string' ? req.body.domainName.trim() : '';
     const sessionState = typeof req.body?.state === 'string' ? req.body.state.trim() : '';
 

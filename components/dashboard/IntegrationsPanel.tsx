@@ -62,7 +62,7 @@ export const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({
   const [resendSelectedDomainId, setResendSelectedDomainId] = useState('');
   const [resendApiKey, setResendApiKey] = useState('');
   const [resendFromEmail, setResendFromEmail] = useState('');
-  const [resendFromName, setResendFromName] = useState('AwardX');
+  const [resendFromName, setResendFromName] = useState('');
   const [resendKeyAutofilled, setResendKeyAutofilled] = useState(false);
 
   const [diditApiKey, setDiditApiKey] = useState('');
@@ -151,7 +151,7 @@ export const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({
     setResendSelectedDomainId('');
     setResendApiKey('');
     setResendFromEmail('');
-    setResendFromName('AwardX');
+    setResendFromName('');
     setResendKeyAutofilled(false);
   };
 
@@ -278,7 +278,7 @@ export const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({
       const result = await connectResend({
         apiKey: resendApiKey.trim(),
         fromEmail: resendFromEmail.trim(),
-        fromName: resendFromName.trim() || 'AwardX',
+        fromName: resendFromName.trim() || 'Platform',
         domainName: domain?.name,
         state: resendSessionState,
       });
@@ -444,7 +444,7 @@ export const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({
           description={
             integrationStatus?.payment?.source === 'program'
               ? `Using payment setup from ${integrationStatus.payment.sourceProgramTitle || 'another event'}.`
-              : 'Sign in on Razorpay and authorize AwardX to accept payments for this event.'
+              : 'Sign in on Razorpay and authorize the platform to accept payments for this event.'
           }
           accentClass="from-[#0C2451] to-[#3395FF]"
           logoLabel="R"
@@ -629,7 +629,7 @@ export const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({
                   {resendStep === 'bootstrap' && (
                     <div className="space-y-4">
                       <p className="text-sm text-slate-600">
-                        Step 2: Open your Resend API keys page and copy an existing key (or create one with full access). We use it once to list your projects and generate an AwardX key.
+                        Step 2: Open your Resend API keys page and copy an existing key (or create one with full access). We use it once to list your projects and generate a scoped API key.
                       </p>
                       <a
                         href={resendApiKeysUrl}
@@ -659,7 +659,7 @@ export const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({
                   {resendStep === 'project' && (
                     <div className="space-y-4">
                       <p className="text-sm text-slate-600">
-                        Step 3: Select the Resend project (verified sending domain) AwardX should use.
+                        Step 3: Select the Resend project (verified sending domain) to use.
                       </p>
                       <div>
                         <label className="block text-sm font-semibold text-slate-700 mb-1">Project / domain</label>
@@ -686,7 +686,7 @@ export const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({
                       {saving && (
                         <p className="text-sm text-indigo-600 flex items-center gap-2">
                           <Loader2 className="w-4 h-4 animate-spin" />
-                          Generating AwardX API key…
+                          Generating API key…
                         </p>
                       )}
                     </div>
@@ -728,7 +728,7 @@ export const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({
                           type="text"
                           value={resendFromName}
                           onChange={(e) => setResendFromName(e.target.value)}
-                          placeholder="AwardX"
+                          placeholder="Your organization"
                           className="w-full px-4 py-2 border border-slate-200 rounded-lg"
                         />
                       </div>

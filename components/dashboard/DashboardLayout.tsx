@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 
 import { motion, AnimatePresence } from 'framer-motion';
+import { Logo } from '../Logo';
 import { Program, Category, PERMISSIONS, programStatusLabel } from '../../services/models';
 
 interface DashboardUser {
@@ -54,6 +55,7 @@ interface DashboardLayoutProps {
   onAwardsViewModeChange?: (mode: AwardsViewMode) => void;
   scheduleRepresentation?: ScheduleRepresentation;
   onScheduleRepresentationChange?: (mode: ScheduleRepresentation) => void;
+  isDemoMode?: boolean;
 }
 
 interface SidebarItemProps {
@@ -107,6 +109,7 @@ const buildDefaultPublishRequirements = (): PublishRequirements => ({
 const SidebarItem: React.FC<SidebarItemProps> = ({ id, label, icon: Icon, currentView, collapsed, onClick, children }) => (
   <div className="mb-1">
     <button
+      data-demo-target={`nav-${id}`}
       onClick={onClick}
       aria-current={currentView === id ? 'page' : undefined}
       className={`group w-full flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${currentView === id
@@ -212,9 +215,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   onAwardsViewModeChange,
   scheduleRepresentation = 'tiles',
   onScheduleRepresentationChange,
+  isDemoMode = false,
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(isDemoMode);
   const [isRightCollapsed, setIsRightCollapsed] = useState(false);
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
   const [isUnpublishModalOpen, setIsUnpublishModalOpen] = useState(false);
@@ -643,15 +647,33 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   }, [pendingShortcut]);
 
   useEffect(() => {
+    if (isDemoMode) return;
+
     const channel = realtime.subscribeToNotifications(() => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     });
 
     return () => realtime.unsubscribe(channel);
-  }, [queryClient]);
+  }, [queryClient, isDemoMode]);
 
 
   useEffect(() => {
+    if (isDemoMode) {
+      setPermissionsReady(true);
+      setUserPermissions(Object.values(PERMISSIONS));
+      setCurrentUser({
+        id: 'demo-user-1',
+        name: 'Alex Morgan',
+        email: 'alex@acmefoundation.org',
+        role: 'Admin',
+        status: 'Active',
+        lastActive: 'Now',
+        avatar: '',
+        joinedDate: '2025-01-15',
+      });
+      return;
+    }
+
     // Fetch user + permissions once per mount instead of on every event/category refresh.
     const fetchUserData = async () => {
       try {
@@ -687,7 +709,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     };
 
     fetchUserData();
-  }, []);
+  }, [isDemoMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -770,6 +792,18 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       const fallback = buildDefaultPublishRequirements();
       setPublishRequirements(fallback);
       return fallback;
+    }
+
+    if (isDemoMode) {
+      const allMet: PublishRequirements = {
+        schedule: { label: 'Schedule', isMet: true, detail: 'Submission deadline is set.' },
+        rounds: { label: 'Rounds', isMet: true, detail: '4 rounds configured.' },
+        judges: { label: 'Judges', isMet: true, detail: '4 judges assigned.' },
+        formBuilder: { label: 'Form Builder', isMet: true, detail: 'Innovation Awards Entry Form has 8 fields configured.' },
+        nominationButton: { label: 'Nomination Button', isMet: true, detail: 'Nomination form is linked to the landing page.' },
+      };
+      setPublishRequirements(allMet);
+      return allMet;
     }
 
     setCheckingRequirements(true);
@@ -892,6 +926,39 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     }
   };
 
+  useEffect(() => {
+    if (!isDemoMode) return;
+
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail === 'open-publish-modal') {
+        if (!activeEvent || updatingStatus || isProgramLive) return;
+        void refreshPublishRequirements();
+        setIsPublishModalOpen(true);
+        return;
+      }
+
+      if (detail === 'confirm-publish') {
+        if (!activeEvent || updatingStatus) return;
+        void (async () => {
+          setUpdatingStatus(true);
+          try {
+            const updatedProgram = await databaseService.updateProgram({ ...activeEvent, status: 'Active' });
+            onSelectProgram(updatedProgram);
+            setIsPublishModalOpen(false);
+          } catch (error) {
+            console.error('Failed to publish program in demo:', error);
+          } finally {
+            setUpdatingStatus(false);
+          }
+        })();
+      }
+    };
+
+    window.addEventListener('demo-action', handler);
+    return () => window.removeEventListener('demo-action', handler);
+  }, [isDemoMode, activeEvent, updatingStatus, isProgramLive, onSelectProgram]);
+
   const handleUnpublishProgram = async () => {
     if (!activeEvent || updatingStatus) return;
     setUpdatingStatus(true);
@@ -964,8 +1031,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       <aside
         role="navigation"
         aria-label="Dashboard navigation"
-        onMouseEnter={() => setIsSidebarExpanded(true)}
-        onMouseLeave={() => setIsSidebarExpanded(false)}
+        onMouseEnter={() => { if (!isDemoMode) setIsSidebarExpanded(true); }}
+        onMouseLeave={() => { if (!isDemoMode) setIsSidebarExpanded(false); }}
         className={`hidden lg:flex flex-col fixed inset-y-0 left-0 z-40 bg-white border-r border-slate-200 transition-all duration-200 ease-out ${
           isSidebarExpanded ? 'w-64 shadow-lg' : 'w-20'
         }`}
@@ -1028,6 +1095,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 <HoldToggleNavItem
                   key={item.id}
                   navId="schedule-rounds"
+                  demoTarget="nav-schedule-rounds"
                   label={item.label}
                   icon={item.icon}
                   currentView={currentView}
@@ -1154,6 +1222,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               setIsSearchOpen(true);
             }}
             onToggleLive={handleToggleProgramStatus}
+            publishDemoTarget="publish-toggle"
             onBackToHub={onSwitchEvent}
             onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
             notifications={notifications}
@@ -1187,7 +1256,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         )}
 
         {/* Scrollable Content */}
-        <main id="main-content" className={`flex-1 overflow-y-auto ${noPadding ? '' : 'p-4 lg:p-8'}`}>
+        <main id="main-content" data-demo-target="main-content" className={`flex-1 overflow-y-auto ${noPadding ? '' : 'p-4 lg:p-8'}`}>
           <div className={noPadding || currentView === 'settings' ? 'h-full w-full' : 'max-w-7xl mx-auto'}>
             {children}
           </div>
@@ -1213,12 +1282,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               className="fixed inset-y-0 left-0 w-72 bg-white z-50 flex flex-col lg:hidden shadow-2xl overflow-y-auto"
             >
               <div className="h-20 flex items-center justify-between px-6 border-b border-slate-100 shrink-0">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
-                    <Sparkles className="w-4 h-4 text-white" />
-                  </div>
-                  <span className="font-bold text-xl text-slate-900 font-display">AwardX</span>
-                </div>
+                <Logo size="lg" />
                 <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 bg-slate-50 rounded-lg text-slate-500"><X className="w-5 h-5" /></button>
               </div>
 
@@ -1360,6 +1424,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             </Button>
             <Button
               type="button"
+              data-demo-target="publish-confirm"
               onClick={handlePublishProgram}
               disabled={checkingRequirements || hasPublishBlockers || updatingStatus}
             >

@@ -130,6 +130,7 @@ export const RoundNode: React.FC<NodeProps<RoundNodeData>> = ({ data }) => {
   return (
     <div
       onClick={onSelect}
+      data-demo-target={round.id === 'round-1' ? 'schedule-round-node-1' : undefined}
       className={`
         relative w-[280px] rounded-xl border bg-white transition-all duration-200 group
         ${isSelected

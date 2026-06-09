@@ -12,6 +12,8 @@ import { Timeline } from '../Timeline';
 import { Testimonials } from '../Testimonials';
 import { OpenSourceShowcase } from '../OpenSourceShowcase';
 import { Button } from '../Button';
+import { Logo } from '../Logo';
+import { GITHUB_REPO } from '@/lib/brand';
 
 const CTASection = () => (
   <section className="py-32 relative overflow-hidden bg-white">
@@ -25,8 +27,8 @@ const CTASection = () => (
         <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-600/30 rounded-full blur-[100px] pointer-events-none"></div>
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-600/30 rounded-full blur-[100px] pointer-events-none"></div>
 
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[15rem] font-black text-white opacity-[0.03] select-none pointer-events-none font-display">
-          AWARDX
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 select-none pointer-events-none">
+          <Logo size="watermark" />
         </div>
 
         <div className="relative z-10">
@@ -43,7 +45,7 @@ const CTASection = () => (
           </p>
           <div className="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-4">
             <a
-              href="https://github.com/Cognivo25/AwardX"
+              href={GITHUB_REPO}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center justify-center gap-2 px-10 py-4 text-lg font-bold rounded-full bg-white text-slate-900 hover:bg-slate-100 transition-colors shadow-xl"

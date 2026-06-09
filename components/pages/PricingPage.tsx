@@ -78,7 +78,7 @@ export const PricingPage: React.FC = () => {
             </div>
             <Button variant="white" className="w-full mb-8">Start Free Trial</Button>
             <ul className="space-y-3 mb-8 flex-1">
-               {["Unlimited Entries", "Unlimited Judges", "WhatsApp Campaigns", "Multi-round Judging", "CRM System", "Remove AwardX Branding", "Priority Support"].map((f,i) => (
+               {["Unlimited Entries", "Unlimited Judges", "WhatsApp Campaigns", "Multi-round Judging", "CRM System", "Remove Platform Branding", "Priority Support"].map((f,i) => (
                  <li key={i} className="flex items-center text-sm text-slate-300">
                     <Check className="w-4 h-4 text-indigo-400 mr-3" /> {f}
                  </li>

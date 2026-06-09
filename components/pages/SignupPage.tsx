@@ -4,6 +4,7 @@ import { ArrowLeft, Sparkles, Check, Mail, Lock, User, Eye, EyeOff } from 'lucid
 import { auth } from '../../services/supabase';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { sanitizeRedirectPath, storePostAuthRedirect } from '../../lib/safeRedirect';
+import { Logo } from '../Logo';
 
 function humanizeAuthError(message: string): string {
   const m = message.toLowerCase();
@@ -106,11 +107,8 @@ export const SignupPage: React.FC = () => {
             <ArrowLeft className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" /> Back
           </button>
           
-          <div className="lg:hidden flex items-center gap-2">
-             <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-white" />
-             </div>
-             <span className="text-lg font-bold text-slate-900 font-display">AwardX</span>
+          <div className="lg:hidden">
+                <Logo size="lg" />
           </div>
         </div>
 
@@ -121,11 +119,8 @@ export const SignupPage: React.FC = () => {
            className="flex-1 flex flex-col justify-center max-w-md mx-auto w-full"
         >
           {/* Logo - Desktop only */}
-          <div className="hidden lg:flex items-center gap-3 mb-10">
-             <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                <Sparkles className="w-5 h-5 text-white" />
-             </div>
-             <span className="text-2xl font-bold tracking-tight text-slate-900 font-display">AwardX</span>
+          <div className="hidden lg:block mb-10">
+             <Logo size="2xl" />
           </div>
 
           <div className="mb-8">
@@ -275,7 +270,7 @@ export const SignupPage: React.FC = () => {
         </motion.div>
         
         <div className="mt-12 text-xs text-slate-400 text-center">
-          &copy; {new Date().getFullYear()} AwardX Inc.
+          &copy; {new Date().getFullYear()}
         </div>
       </div>
 
@@ -301,11 +296,11 @@ export const SignupPage: React.FC = () => {
               
               <div className="flex items-center justify-between mb-8">
                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center border-2 border-indigo-400">
-                       <Sparkles className="w-5 h-5 text-white" />
+                    <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center border-2 border-indigo-400 overflow-hidden">
+                       <Logo size="xs" />
                     </div>
                     <div>
-                       <div className="text-white font-bold text-sm">AwardX Bot</div>
+                       <div className="text-white font-bold text-sm">Assistant</div>
                        <div className="text-indigo-200 text-xs">Just now</div>
                     </div>
                  </div>
@@ -359,7 +354,7 @@ export const SignupPage: React.FC = () => {
          
          <div className="absolute bottom-12 text-center">
             <p className="text-slate-400 text-sm max-w-sm mx-auto italic">
-              "AwardX transformed how we handle our 5,000+ yearly submissions. It's simply beautiful."
+              "This platform transformed how we handle our 5,000+ yearly submissions. It's simply beautiful."
             </p>
             <p className="text-slate-500 text-xs mt-3 font-bold uppercase tracking-widest">Global Design Awards</p>
          </div>

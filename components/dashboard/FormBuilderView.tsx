@@ -88,6 +88,17 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
   const [copiedFormId, setCopiedFormId] = useState<string | null>(null);
   const [awardOptions, setAwardOptions] = useState<string[]>([]);
   const [elementsPanelOpen, setElementsPanelOpen] = useState(true);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail === 'form-open-elements') {
+        setElementsPanelOpen(true);
+      }
+    };
+    window.addEventListener('demo-action', handler);
+    return () => window.removeEventListener('demo-action', handler);
+  }, []);
   const [propertiesPanelOpen, setPropertiesPanelOpen] = useState(false);
   const [activeFormId, setActiveFormId] = useState<string | null>(null);
   const [isLoadingForms, setIsLoadingForms] = useState(true);
@@ -374,7 +385,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
         portalTarget
       )}
 
-      <div className="relative flex flex-col lg:flex-row h-full min-h-0 flex-1">
+      <div className="relative flex flex-col lg:flex-row h-full min-h-0 flex-1" data-demo-target="form-builder-canvas">
         <div className="relative flex-1 min-w-0 min-h-[48vh]">
           {!elementsPanelOpen && (selectedFormId || isCreatingNew) && (
             <FloatingPanelToggle

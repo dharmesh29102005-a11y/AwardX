@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { Logo } from '../Logo';
 import { 
   Settings, FilePlus, Share, Layers, Gavel, Trophy,
   Megaphone, UserCheck, Vote
@@ -71,7 +72,10 @@ export const HowItWorksPage: React.FC = () => {
     <div className="pt-24 pb-20 bg-white min-h-screen">
       {/* Hero */}
       <section className="text-center max-w-4xl mx-auto px-4 mb-20">
-        <h1 className="text-5xl md:text-6xl font-bold text-slate-900 mb-6 font-display">How AwardX Works</h1>
+        <div className="flex flex-col items-center gap-4 mb-6">
+          <Logo size="2xl" />
+          <h1 className="text-5xl md:text-6xl font-bold text-slate-900 font-display">How it works</h1>
+        </div>
         <p className="text-xl text-slate-600">
           A simple, end-to-end workflow for running any competition or award. <br/>
           From concept to ceremony in one platform.

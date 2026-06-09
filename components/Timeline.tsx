@@ -74,7 +74,7 @@ export const Timeline: React.FC = () => {
             viewport={{ once: true }}
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 backdrop-blur-xl border border-white/10 text-indigo-300 text-xs font-bold tracking-widest uppercase mb-6"
           >
-            <ArrowRight className="w-3.5 h-3.5" /> How AwardX works
+            <ArrowRight className="w-3.5 h-3.5" /> How it works
           </motion.span>
           <motion.h2
             initial={{ opacity: 0, y: 20 }}
