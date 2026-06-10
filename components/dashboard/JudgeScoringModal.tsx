@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileText, ChevronDown, ChevronUp, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { FileText, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
@@ -8,6 +8,7 @@ import { db } from '../../services/database';
 import { Submission, JudgingCriterion, CriterionScore } from '../../services/models';
 import { queryKeys } from '../../services/queryKeys';
 import { useConfirm } from '../ConfirmDialog';
+import { SubmissionFormResponses } from './SubmissionFormResponses';
 
 interface JudgeScoringModalProps {
   isOpen: boolean;
@@ -22,64 +23,6 @@ interface JudgeScoringModalProps {
   /** Invite token for judge portal scoring (bypasses org auth) */
   judgeToken?: string;
 }
-
-// Renders submitted form data from the submission_data jsonb field
-const FormDataViewer: React.FC<{ submissionData: Record<string, unknown> }> = ({ submissionData }) => {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-
-  const entries = Object.entries(submissionData || {}).filter(
-    ([key]) => key !== 'votes' && key !== '__v',
-  );
-
-  if (entries.length === 0) {
-    return (
-      <div className="flex items-center gap-2 text-slate-400 text-sm p-6">
-        <AlertCircle className="w-4 h-4 flex-shrink-0" />
-        No form data submitted.
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3 p-6">
-      {entries.map(([key, value]) => {
-        const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-        const strVal = typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value ?? '');
-        const isLong = strVal.length > 200;
-        const isExpanded = expanded.has(key);
-
-        return (
-          <div key={key} className="bg-slate-50 rounded-xl p-4">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">{label}</p>
-            {isLong && !isExpanded ? (
-              <>
-                <p className="text-sm text-slate-800 whitespace-pre-wrap">{strVal.slice(0, 200)}…</p>
-                <button
-                  onClick={() => setExpanded(prev => { const s = new Set(prev); s.add(key); return s; })}
-                  className="mt-1 text-xs text-indigo-600 hover:underline flex items-center gap-1"
-                >
-                  Show more <ChevronDown className="w-3 h-3" />
-                </button>
-              </>
-            ) : (
-              <>
-                <p className="text-sm text-slate-800 whitespace-pre-wrap">{strVal}</p>
-                {isLong && (
-                  <button
-                    onClick={() => setExpanded(prev => { const s = new Set(prev); s.delete(key); return s; })}
-                    className="mt-1 text-xs text-indigo-600 hover:underline flex items-center gap-1"
-                  >
-                    Show less <ChevronUp className="w-3 h-3" />
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-};
 
 export const JudgeScoringModal: React.FC<JudgeScoringModalProps> = ({
   isOpen,
@@ -296,7 +239,7 @@ export const JudgeScoringModal: React.FC<JudgeScoringModalProps> = ({
             <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">{submission.status}</span>
           </div>
 
-          <FormDataViewer submissionData={submission.submissionData as Record<string, unknown> ?? {}} />
+          <SubmissionFormResponses submission={submission} enabled={isOpen} />
 
           {/* Existing scores from other judges (admin view only) */}
           {!isJudgeView && existingScores.length > 0 && (

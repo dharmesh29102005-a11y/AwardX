@@ -17,7 +17,8 @@ import { scheduleRoundsService } from '../../services/scheduleRoundsDb';
 import { resendJudgeInvite } from '../../services/email';
 import { judgingCriteria, refreshUserCache, supabase, realtime } from '../../services/supabase';
 import { queryKeys } from '../../services/queryKeys';
-import { JudgeScoringModal } from './JudgeScoringModal';
+import { JudgeScoresOverviewPanel } from './JudgeScoresOverviewPanel';
+import { SubmissionReviewSheet } from './SubmissionReviewSheet';
 
 interface JudgingViewProps {
    activeEvent?: Program | null;
@@ -32,7 +33,7 @@ const defaultCriteria: JudgingCriterion[] = [
 export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    const { confirm, ConfirmDialogNode } = useConfirm();
    const queryClient = useQueryClient();
-   const [activeTab, setActiveTab] = useState<'overview' | 'panel' | 'scorecard' | 'assignments'>('overview');
+   const [activeTab, setActiveTab] = useState<'overview' | 'panel' | 'scoring' | 'scorecard' | 'assignments'>('overview');
    const [selectedIds, setSelectedIds] = useState<string[]>([]);
    const [selectedJudgesForBulk, setSelectedJudgesForBulk] = useState<string[]>([]);
    const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
@@ -57,9 +58,10 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    const [criteriaNotice, setCriteriaNotice] = useState<string | null>(null);
    const [criteriaError, setCriteriaError] = useState<string | null>(null);
 
-   // Scoring modal state
-   const [scoringModalOpen, setScoringModalOpen] = useState(false);
+   // Submission review sheet state
+   const [reviewSheetOpen, setReviewSheetOpen] = useState(false);
    const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
+   const [scoresOverviewJudge, setScoresOverviewJudge] = useState<Judge | null>(null);
 
    // Auto-assign state
    const [isAutoAssignModalOpen, setIsAutoAssignModalOpen] = useState(false);
@@ -286,6 +288,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.judges.all(activeEvent.id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.submissions.all(activeEvent.id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.judgeGroups.all(activeEvent.id) });
+      queryClient.invalidateQueries({ queryKey: ['judging', 'scores-by-round', activeEvent.id] });
    }, [activeEvent?.id, queryClient]);
 
    // Realtime judging progress subscription
@@ -522,12 +525,15 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
   return (
     <div className="space-y-8">
       {ConfirmDialogNode}
-      <JudgeScoringModal
-        isOpen={scoringModalOpen}
-        onClose={() => { setScoringModalOpen(false); setSelectedSubmission(null); }}
+      <SubmissionReviewSheet
+        isOpen={reviewSheetOpen}
+        onClose={() => {
+          setReviewSheetOpen(false);
+          setSelectedSubmission(null);
+        }}
         submission={selectedSubmission}
-        criteria={criteria}
-        onScored={refreshAll}
+        judges={judges}
+        programId={activeEvent?.id}
       />
          <div className="flex flex-col gap-4 lg:flex-row lg:justify-between lg:items-center">
         <div>
@@ -535,17 +541,23 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
           <p className="text-slate-500">Track scoring progress and manage your panel.</p>
         </div>
             <div className="flex bg-white rounded-lg p-1 border border-slate-200 shadow-sm overflow-x-auto">
-           {['overview', 'panel', 'scorecard', 'assignments'].map((tab) => (
+           {([
+              { id: 'overview', label: 'Overview' },
+              { id: 'panel', label: 'Panel' },
+              { id: 'scoring', label: 'Scoring' },
+              { id: 'scorecard', label: 'Criteria' },
+              { id: 'assignments', label: 'Assignments' },
+           ] as const).map((tab) => (
               <button
-                 key={tab}
-                 onClick={() => setActiveTab(tab as any)}
+                 key={tab.id}
+                 onClick={() => setActiveTab(tab.id)}
                          className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${
-                    activeTab === tab 
+                    activeTab === tab.id
                     ? 'bg-slate-900 text-white shadow' 
                     : 'text-slate-500 hover:text-slate-900'
                  }`}
               >
-                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                 {tab.label}
               </button>
            ))}
         </div>
@@ -599,22 +611,22 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                                     className="hover:bg-indigo-50/40 transition-colors cursor-pointer"
                                     onClick={() => {
                                        setSelectedSubmission(submission);
-                                       setScoringModalOpen(true);
+                                       setReviewSheetOpen(true);
                                     }}
                                     onKeyDown={(e) => {
                                        if (e.key === 'Enter' || e.key === ' ') {
                                           e.preventDefault();
                                           setSelectedSubmission(submission);
-                                          setScoringModalOpen(true);
+                                          setReviewSheetOpen(true);
                                        }
                                     }}
                                     tabIndex={0}
                                     role="button"
-                                    aria-label={`Score submission ${submission.title}`}
+                                    aria-label={`View submission ${submission.title}`}
                                  >
                                     <td className="p-4">
                                        <div className="font-semibold text-slate-900 text-sm">{submission.title}</div>
-                                       <div className="text-xs text-slate-500">{submission.category} · Tap to score</div>
+                                       <div className="text-xs text-slate-500">{submission.category} · Tap to view</div>
                                     </td>
                                     <td className="p-4 text-sm text-slate-700">{submission.applicant || '-'}</td>
                                     <td className="p-4">
@@ -808,25 +820,18 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                      </div>
 
                      <div className="flex gap-2">
-                        {(() => {
-                           const assignedSub = submissions.find(s =>
-                              (s.assignedJudges || []).includes(judge.id)
-                           ) ?? null;
-                           return (
-                              <button
-                                 className="flex-1 py-2 text-sm font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors border border-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
-                                 title={assignedSub ? undefined : 'No assignments found'}
-                                 disabled={!assignedSub}
-                                 onClick={() => {
-                                    if (!assignedSub) return;
-                                    setSelectedSubmission(assignedSub);
-                                    setScoringModalOpen(true);
-                                 }}
-                              >
-                                 View Scores
-                              </button>
-                           );
-                        })()}
+                        <button
+                           className="flex-1 py-2 text-sm font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors border border-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                           title={judge.assignedCount > 0 ? undefined : 'No assignments found'}
+                           disabled={judge.assignedCount === 0}
+                           onClick={() => {
+                              if (judge.assignedCount === 0) return;
+                              setScoresOverviewJudge(judge);
+                              setActiveTab('scoring');
+                           }}
+                        >
+                           View Scores
+                        </button>
                         <button
                            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg border border-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
                            title="Resend invite"
@@ -900,6 +905,38 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                   </button>
                </div>
             )}
+         </div>
+      )}
+
+      {activeTab === 'scoring' && activeEvent?.id && (
+         <div className="space-y-6">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+               <div>
+                  <h2 className="text-lg font-bold text-slate-900">Scoring by Round</h2>
+                  <p className="text-sm text-slate-500">
+                     Each round lists its judges and assigned submissions. Click an entry to open the scorecard.
+                  </p>
+               </div>
+               {scoresOverviewJudge && (
+                  <button
+                     type="button"
+                     onClick={() => setScoresOverviewJudge(null)}
+                     className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                  >
+                     Show all judges
+                  </button>
+               )}
+            </div>
+            <JudgeScoresOverviewPanel
+               programId={activeEvent.id}
+               submissions={allSubmissions}
+               focusJudgeId={scoresOverviewJudge?.id}
+               focusJudgeName={scoresOverviewJudge?.name}
+               onOpenSubmission={(submission) => {
+                  setSelectedSubmission(submission);
+                  setReviewSheetOpen(true);
+               }}
+            />
          </div>
       )}
 
@@ -1139,7 +1176,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                                  </td>
                                  <td className="p-4">
                                     <button
-                                       onClick={() => { setSelectedSubmission(sub); setScoringModalOpen(true); }}
+                                       onClick={() => { setSelectedSubmission(sub); setReviewSheetOpen(true); }}
                                        className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors border border-indigo-200"
                                     >
                                        Score Entry

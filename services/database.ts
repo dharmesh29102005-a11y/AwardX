@@ -1542,6 +1542,10 @@ class DatabaseService {
       assignedJudges: s.submission_judges?.map((sj: any) => sj.judge_id) || [],
       votes: s.votes_count || s.submission_data?.votes || 0,
       submissionData: s.submission_data || {},
+      description: s.description || undefined,
+      coverImageUrl: s.cover_image_url || undefined,
+      applicantName: s.applicant_name || undefined,
+      submittedAt: s.submitted_at || undefined,
     };
   }
 
@@ -3207,6 +3211,154 @@ class DatabaseService {
       .eq('submission_id', submissionId);
     if (error || !data) return [];
     return data;
+  }
+
+  async getJudgeScoresByRound(programId: string) {
+    if (isDemoMode()) return [];
+
+    if (!supabase) return [];
+
+    const rounds = await this.getRounds(programId);
+    const { data: assignmentRows, error } = await supabase
+      .from('submission_judges')
+      .select(`
+        id,
+        status,
+        judge_id,
+        round_id,
+        submissions!inner (
+          id,
+          title,
+          applicant_name,
+          program_id
+        ),
+        judges (
+          id,
+          name,
+          email
+        ),
+        rounds (
+          id,
+          title,
+          type,
+          status
+        )
+      `)
+      .eq('submissions.program_id', programId);
+
+    if (error) {
+      console.error('Failed to load judge scores by round:', error);
+      return [];
+    }
+
+    type JudgeBucket = {
+      id: string;
+      name: string;
+      email: string;
+      assignedCount: number;
+      completedCount: number;
+      assignments: Array<{
+        submissionJudgeId: string;
+        submissionId: string;
+        submissionTitle: string;
+        applicantName?: string;
+        status: string;
+      }>;
+    };
+
+    const roundBuckets = new Map<string, Map<string, JudgeBucket>>();
+    const roundMeta = new Map<string, { title: string; type: string; status: string }>();
+
+    for (const round of rounds) {
+      roundMeta.set(round.id, {
+        title: round.title,
+        type: round.type,
+        status: round.status,
+      });
+      roundBuckets.set(round.id, new Map());
+    }
+
+    const generalRoundId = '__general__';
+    roundBuckets.set(generalRoundId, new Map());
+    roundMeta.set(generalRoundId, {
+      title: 'General Assignments',
+      type: 'Judging',
+      status: 'Active',
+    });
+
+    for (const row of assignmentRows || []) {
+      const judge = row.judges as { id: string; name: string; email: string } | null;
+      const submission = row.submissions as { id: string; title: string; applicant_name?: string } | null;
+      const round = row.rounds as { id: string; title: string; type: string; status: string } | null;
+      if (!judge?.id || !submission?.id) continue;
+
+      const roundId = row.round_id || round?.id || generalRoundId;
+      if (!roundBuckets.has(roundId)) {
+        roundBuckets.set(roundId, new Map());
+      }
+      if (round && !roundMeta.has(roundId)) {
+        roundMeta.set(roundId, {
+          title: round.title,
+          type: round.type,
+          status: round.status,
+        });
+      }
+
+      const judgesInRound = roundBuckets.get(roundId)!;
+      if (!judgesInRound.has(judge.id)) {
+        judgesInRound.set(judge.id, {
+          id: judge.id,
+          name: judge.name,
+          email: judge.email,
+          assignedCount: 0,
+          completedCount: 0,
+          assignments: [],
+        });
+      }
+
+      const bucket = judgesInRound.get(judge.id)!;
+      bucket.assignedCount += 1;
+      if (row.status === 'completed') bucket.completedCount += 1;
+      bucket.assignments.push({
+        submissionJudgeId: row.id,
+        submissionId: submission.id,
+        submissionTitle: submission.title,
+        applicantName: submission.applicant_name || undefined,
+        status: row.status || 'pending',
+      });
+    }
+
+    const orderedRoundIds = [
+      ...rounds.map((round) => round.id),
+      ...(roundBuckets.has(generalRoundId) && (roundBuckets.get(generalRoundId)?.size || 0) > 0
+        ? [generalRoundId]
+        : []),
+    ];
+
+    return orderedRoundIds
+      .map((roundId) => {
+        const meta = roundMeta.get(roundId);
+        const judgeMap = roundBuckets.get(roundId);
+        if (!meta || !judgeMap || judgeMap.size === 0) return null;
+
+        const judges = Array.from(judgeMap.values())
+          .map((judge) => ({
+            ...judge,
+            progress: judge.assignedCount
+              ? Math.round((judge.completedCount / judge.assignedCount) * 100)
+              : 0,
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+        return {
+          roundId,
+          roundTitle: meta.title,
+          roundType: meta.type,
+          roundStatus: meta.status,
+          judges,
+        };
+      })
+      .filter(Boolean);
   }
 
   // ── Rounds (update + reorder) ──────────────────────────────────────────────

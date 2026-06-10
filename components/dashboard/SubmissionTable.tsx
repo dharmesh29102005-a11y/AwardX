@@ -9,7 +9,7 @@ import { Program, Submission } from '../../services/models';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
 import { motion, AnimatePresence } from 'framer-motion';
-import { SubmissionDetailModal } from './SubmissionDetailModal';
+import { SubmissionReviewSheet } from './SubmissionReviewSheet';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { TableSkeleton } from '../SkeletonLoader';
 import { realtime } from '../../services/supabase';
@@ -1121,11 +1121,15 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
             </div>
          </Modal>
 
-         {/* Submission Detail Modal */}
-         <SubmissionDetailModal
+         <SubmissionReviewSheet
             isOpen={isDetailModalOpen}
-            onClose={() => setIsDetailModalOpen(false)}
+            onClose={() => {
+               setIsDetailModalOpen(false);
+               setSelectedSubmission(null);
+            }}
             submission={selectedSubmission}
+            judges={judges}
+            programId={activeEvent?.id}
          />
       </div>
    );
