@@ -6,6 +6,7 @@ import { consumePostAuthRedirect, sanitizeRedirectPath, storePostAuthRedirect } 
 
 type InviteContext = {
   organizationId?: string;
+  organizationName?: string;
   programId?: string;
   email?: string;
 };

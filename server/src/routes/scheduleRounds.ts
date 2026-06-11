@@ -273,7 +273,8 @@ router.post('/:programId/rounds', requireAuth, async (req: AuthenticatedRequest,
   try {
     const access = await ensureCanManageProgram(req.userId || '', programId);
     if (!access.ok) {
-      return res.status(access.status).json({ error: access.error });
+      const errAccess = access as { status: number; error: string };
+      return res.status(errAccess.status).json({ error: errAccess.error });
     }
 
     const payload = req.body || {};
@@ -332,7 +333,8 @@ router.put('/:programId/rounds/:id', requireAuth, async (req: AuthenticatedReque
   try {
     const access = await ensureCanManageProgram(req.userId || '', programId);
     if (!access.ok) {
-      return res.status(access.status).json({ error: access.error });
+      const errAccess = access as { status: number; error: string };
+      return res.status(errAccess.status).json({ error: errAccess.error });
     }
 
     const payload = req.body || {};
@@ -414,7 +416,8 @@ router.delete('/:programId/rounds/:id', requireAuth, async (req: AuthenticatedRe
   try {
     const access = await ensureCanManageProgram(req.userId || '', programId);
     if (!access.ok) {
-      return res.status(access.status).json({ error: access.error });
+      const errAccess = access as { status: number; error: string };
+      return res.status(errAccess.status).json({ error: errAccess.error });
     }
 
     const supabase = getSupabaseAdmin();
@@ -462,7 +465,8 @@ router.put('/:programId/edges', requireAuth, async (req: AuthenticatedRequest, r
   try {
     const access = await ensureCanManageProgram(req.userId || '', programId);
     if (!access.ok) {
-      return res.status(access.status).json({ error: access.error });
+      const errAccess = access as { status: number; error: string };
+      return res.status(errAccess.status).json({ error: errAccess.error });
     }
 
     if (!Array.isArray(req.body?.edges)) {
@@ -555,7 +559,8 @@ router.put('/:programId/active-form', requireAuth, async (req: AuthenticatedRequ
   try {
     const access = await ensureCanManageProgram(req.userId || '', programId);
     if (!access.ok) {
-      return res.status(access.status).json({ error: access.error });
+      const errAccess = access as { status: number; error: string };
+      return res.status(errAccess.status).json({ error: errAccess.error });
     }
 
     if (form_id !== undefined && form_id !== null && typeof form_id !== 'string') {

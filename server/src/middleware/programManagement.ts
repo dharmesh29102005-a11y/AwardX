@@ -110,7 +110,8 @@ export function requireProgramManage(paramName = 'programId') {
     try {
       const result = await ensureCanManageProgram(req.userId, programId);
       if (!result.ok) {
-        return res.status(result.status).json({ error: result.error });
+        const errResult = result as { status: number; error: string };
+        return res.status(errResult.status).json({ error: errResult.error });
       }
       return next();
     } catch (error: unknown) {

@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Github, ArrowRight, Sparkles, FileText, Gavel, Vote, CreditCard, Trophy } from 'lucide-react';
+import { Github, ArrowRight, FileText, Gavel, Vote, CreditCard, Trophy } from 'lucide-react';
 import {
   motion,
   useScroll,

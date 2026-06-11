@@ -904,6 +904,10 @@ export const programs = {
     industry_category: string;
     visibility: string;
     timezone: string;
+    kyc_enabled: boolean;
+    kyc_provider: string;
+    application_mode: string;
+    require_github_auth: boolean;
   }>) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: null, error: { message: 'Not authenticated' } };

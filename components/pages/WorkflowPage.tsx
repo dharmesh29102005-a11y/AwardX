@@ -38,10 +38,22 @@ export const WorkflowPage: React.FC = () => {
         run();
     }, [programIdParam]);
 
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
     const handleAddSub = (parentId: string) => {
         // In standalone mode, we can't add categories, but we'll handle it gracefully
         console.log('Add subcategory requested:', parentId);
         // Optionally, you could open a modal or redirect back to the main dashboard
+    };
+
+    const handleToggleSelect = (id: string) => {
+        setSelectedIds(prev =>
+            prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+        );
+    };
+
+    const handleDelete = (id: string) => {
+        console.log('Delete requested:', id);
     };
 
     if (isLoading) {
@@ -68,7 +80,14 @@ export const WorkflowPage: React.FC = () => {
 
     return (
         <div className="w-screen h-screen bg-slate-50">
-            <CategoriesWorkflow categories={categories} onAddSub={handleAddSub} programId={programId} />
+            <CategoriesWorkflow
+                categories={categories}
+                onAddSub={handleAddSub}
+                onDelete={handleDelete}
+                selectedIds={selectedIds}
+                onToggleSelect={handleToggleSelect}
+                programId={programId}
+            />
         </div>
     );
 };

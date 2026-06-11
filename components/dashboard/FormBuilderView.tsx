@@ -156,7 +156,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
     })();
   }, [activeEvent]);
 
-  const loadSavedForms = async () => {
+  const loadSavedForms = async (forceReload = false) => {
     if (!activeEvent) return;
 
     setIsLoadingForms(true);
@@ -189,7 +189,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
       };
 
       setSavedForms([singleForm]);
-      if (!selectedFormId || selectedFormId !== singleForm.id) {
+      if (forceReload || !selectedFormId || selectedFormId !== singleForm.id) {
         handleLoadForm(singleForm);
       }
     } finally {
@@ -213,7 +213,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
       try {
         await db.updateForm(selectedFormId, { pages, theme });
         await db.replaceFormFields(selectedFormId, normalizedFields.map(mapFormFieldToDbPayload));
-        await loadSavedForms();
+        await loadSavedForms(true);
         setSaveMessage({ type: 'success', text: 'Form saved successfully!' });
         setTimeout(() => setSaveMessage(null), 5000);
       } catch (error: any) {
@@ -249,7 +249,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
         setActiveFormId(selectedFormId);
         await queryClient.invalidateQueries({ queryKey: queryKeys.programForms.active(activeEvent.id) });
       }
-      await loadSavedForms();
+      await loadSavedForms(true);
       setSaveMessage({
         type: 'success',
         text: targetForm.isActive ? 'Form unpublished.' : 'Form saved and published!'

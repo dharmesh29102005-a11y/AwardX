@@ -56,7 +56,7 @@ describe('roundExecution route authorization', () => {
 
     const app = express();
     app.use(express.json());
-    app.use(roundExecutionRouter);
+    app.use(roundExecutionRouter as any);
 
     const response = await request(app).post('/rounds/round-1/activate').send({});
 
@@ -70,7 +70,7 @@ describe('roundExecution route authorization', () => {
 
     const app = express();
     app.use(express.json());
-    app.use(roundExecutionRouter);
+    app.use(roundExecutionRouter as any);
 
     const response = await request(app).post('/rounds/missing-round/activate').send({});
 
@@ -82,7 +82,7 @@ describe('roundExecution route authorization', () => {
   it('allows authorized lifecycle mutations', async () => {
     const app = express();
     app.use(express.json());
-    app.use(roundExecutionRouter);
+    app.use(roundExecutionRouter as any);
 
     const response = await request(app).post('/rounds/round-1/activate').send({});
 

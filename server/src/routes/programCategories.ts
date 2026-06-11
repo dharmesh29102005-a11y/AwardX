@@ -27,7 +27,8 @@ router.get('/:programId/categories', requireAuth, async (req: AuthenticatedReque
   try {
     const access = await ensureCanManageProgram(req.userId || '', programId);
     if (!access.ok) {
-      return res.status(access.status).json({ error: access.error });
+      const errAccess = access as { status: number; error: string };
+      return res.status(errAccess.status).json({ error: errAccess.error });
     }
 
     const supabase = getSupabaseAdmin();
@@ -62,7 +63,8 @@ router.post('/:programId/categories', requireAuth, async (req: AuthenticatedRequ
   try {
     const access = await ensureCanManageProgram(req.userId || '', programId);
     if (!access.ok) {
-      return res.status(access.status).json({ error: access.error });
+      const errAccess = access as { status: number; error: string };
+      return res.status(errAccess.status).json({ error: errAccess.error });
     }
 
     const supabase = getSupabaseAdmin();
@@ -117,7 +119,8 @@ router.delete('/:programId/categories', requireAuth, async (req: AuthenticatedRe
   try {
     const access = await ensureCanManageProgram(req.userId || '', programId);
     if (!access.ok) {
-      return res.status(access.status).json({ error: access.error });
+      const errAccess = access as { status: number; error: string };
+      return res.status(errAccess.status).json({ error: errAccess.error });
     }
 
     const supabase = getSupabaseAdmin();
@@ -145,7 +148,8 @@ router.delete('/:programId/categories/:categoryId', requireAuth, async (req: Aut
   try {
     const access = await ensureCanManageProgram(req.userId || '', programId);
     if (!access.ok) {
-      return res.status(access.status).json({ error: access.error });
+      const errAccess = access as { status: number; error: string };
+      return res.status(errAccess.status).json({ error: errAccess.error });
     }
 
     const supabase = getSupabaseAdmin();

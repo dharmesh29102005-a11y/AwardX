@@ -400,7 +400,8 @@ async function handleVerifyJudge(req: any, res: any) {
 						category_id,
 						submitted_at,
 						applicant_name,
-						votes_count
+						votes_count,
+						submission_data
 					)
 				`)
 				.eq('judge_id', judge.id)
@@ -422,7 +423,7 @@ async function handleVerifyJudge(req: any, res: any) {
 		if (effectiveProgramId && assignments.length === 0) {
 			const { data: programSubs } = await supabase
 				.from('submissions')
-				.select('id, title, description, cover_image_url, status, category_id, submitted_at, applicant_name, votes_count')
+				.select('id, title, description, cover_image_url, status, category_id, submitted_at, applicant_name, votes_count, submission_data')
 				.eq('program_id', effectiveProgramId)
 				.order('submitted_at', { ascending: false });
 
@@ -531,6 +532,7 @@ async function handleVerifyJudge(req: any, res: any) {
 					submittedAt: row.submissions.submitted_at,
 					applicantName: row.submissions.applicant_name,
 					voteCount: row.submissions.votes_count,
+					submissionData: row.submissions.submission_data || {},
 				} : null,
 			})),
 			criteria: criteria.map((c: any) => ({
