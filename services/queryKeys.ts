@@ -23,6 +23,8 @@ export const queryKeys = {
   judging: {
     criteria: (programId: string) => ['judging', 'criteria', programId] as const,
     scores: (submissionId: string) => ['judging', 'scores', submissionId] as const,
+    scoresByRound: (programId: string, judgeId?: string) =>
+      ['judging', 'scores-by-round', programId, judgeId || 'all'] as const,
   },
   teams: {
     members: (programId: string) => ['teams', programId] as const,

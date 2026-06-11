@@ -1542,6 +1542,10 @@ class DatabaseService {
       assignedJudges: s.submission_judges?.map((sj: any) => sj.judge_id) || [],
       votes: s.votes_count || s.submission_data?.votes || 0,
       submissionData: s.submission_data || {},
+      description: s.description || undefined,
+      coverImageUrl: s.cover_image_url || undefined,
+      applicantName: s.applicant_name || undefined,
+      submittedAt: s.submitted_at || undefined,
     };
   }
 
@@ -1561,6 +1565,8 @@ class DatabaseService {
   async addSubmission(
     submission: Omit<Submission, 'id' | 'date' | 'score' | 'image' | 'assignedJudges'> & {
       programId?: string;
+      applicantEmail?: string;
+      responses?: Record<string, unknown>;
     },
   ): Promise<Submission> {
     const programId = submission.programId;
@@ -1577,8 +1583,10 @@ class DatabaseService {
         body: {
           title: submission.title,
           applicant: submission.applicant,
+          applicant_email: submission.applicantEmail || '',
           category: submission.category,
           status: submission.status,
+          responses: submission.responses || {},
         },
       },
     );
@@ -3209,6 +3217,154 @@ class DatabaseService {
     return data;
   }
 
+  async getJudgeScoresByRound(programId: string) {
+    if (isDemoMode()) return [];
+
+    if (!supabase) return [];
+
+    const rounds = await this.getRounds(programId);
+    const { data: assignmentRows, error } = await supabase
+      .from('submission_judges')
+      .select(`
+        id,
+        status,
+        judge_id,
+        round_id,
+        submissions!inner (
+          id,
+          title,
+          applicant_name,
+          program_id
+        ),
+        judges (
+          id,
+          name,
+          email
+        ),
+        rounds (
+          id,
+          title,
+          type,
+          status
+        )
+      `)
+      .eq('submissions.program_id', programId);
+
+    if (error) {
+      console.error('Failed to load judge scores by round:', error);
+      return [];
+    }
+
+    type JudgeBucket = {
+      id: string;
+      name: string;
+      email: string;
+      assignedCount: number;
+      completedCount: number;
+      assignments: Array<{
+        submissionJudgeId: string;
+        submissionId: string;
+        submissionTitle: string;
+        applicantName?: string;
+        status: string;
+      }>;
+    };
+
+    const roundBuckets = new Map<string, Map<string, JudgeBucket>>();
+    const roundMeta = new Map<string, { title: string; type: string; status: string }>();
+
+    for (const round of rounds) {
+      roundMeta.set(round.id, {
+        title: round.title,
+        type: round.type,
+        status: round.status,
+      });
+      roundBuckets.set(round.id, new Map());
+    }
+
+    const generalRoundId = '__general__';
+    roundBuckets.set(generalRoundId, new Map());
+    roundMeta.set(generalRoundId, {
+      title: 'General Assignments',
+      type: 'Judging',
+      status: 'Active',
+    });
+
+    for (const row of assignmentRows || []) {
+      const judge = row.judges as { id: string; name: string; email: string } | null;
+      const submission = row.submissions as { id: string; title: string; applicant_name?: string } | null;
+      const round = row.rounds as { id: string; title: string; type: string; status: string } | null;
+      if (!judge?.id || !submission?.id) continue;
+
+      const roundId = row.round_id || round?.id || generalRoundId;
+      if (!roundBuckets.has(roundId)) {
+        roundBuckets.set(roundId, new Map());
+      }
+      if (round && !roundMeta.has(roundId)) {
+        roundMeta.set(roundId, {
+          title: round.title,
+          type: round.type,
+          status: round.status,
+        });
+      }
+
+      const judgesInRound = roundBuckets.get(roundId)!;
+      if (!judgesInRound.has(judge.id)) {
+        judgesInRound.set(judge.id, {
+          id: judge.id,
+          name: judge.name,
+          email: judge.email,
+          assignedCount: 0,
+          completedCount: 0,
+          assignments: [],
+        });
+      }
+
+      const bucket = judgesInRound.get(judge.id)!;
+      bucket.assignedCount += 1;
+      if (row.status === 'completed') bucket.completedCount += 1;
+      bucket.assignments.push({
+        submissionJudgeId: row.id,
+        submissionId: submission.id,
+        submissionTitle: submission.title,
+        applicantName: submission.applicant_name || undefined,
+        status: row.status || 'pending',
+      });
+    }
+
+    const orderedRoundIds = [
+      ...rounds.map((round) => round.id),
+      ...(roundBuckets.has(generalRoundId) && (roundBuckets.get(generalRoundId)?.size || 0) > 0
+        ? [generalRoundId]
+        : []),
+    ];
+
+    return orderedRoundIds
+      .map((roundId) => {
+        const meta = roundMeta.get(roundId);
+        const judgeMap = roundBuckets.get(roundId);
+        if (!meta || !judgeMap || judgeMap.size === 0) return null;
+
+        const judges = Array.from(judgeMap.values())
+          .map((judge) => ({
+            ...judge,
+            progress: judge.assignedCount
+              ? Math.round((judge.completedCount / judge.assignedCount) * 100)
+              : 0,
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+        return {
+          roundId,
+          roundTitle: meta.title,
+          roundType: meta.type,
+          roundStatus: meta.status,
+          judges,
+        };
+      })
+      .filter(Boolean);
+  }
+
   // ── Rounds (update + reorder) ──────────────────────────────────────────────
 
   async updateRound(round: Partial<Round> & { id: string }): Promise<void> {
@@ -3321,22 +3477,74 @@ class DatabaseService {
     const orgId = await getCurrentOrgId();
     if (!orgId) return;
 
-    await supabase
-      .from('invite_request_traces')
-      .insert({
-        organization_id: orgId,
-        program_id: programId,
-        path: trace.path,
-        url: trace.url,
-        method: trace.method,
-        attempt: trace.attempt,
-        started_at: trace.startedAt,
-        finished_at: trace.finishedAt,
-        http_status: trace.status,
-        ok: trace.ok,
-        error_message: trace.error,
-        request_body: trace.requestBody || {},
+    try {
+      await supabase
+        .from('invite_request_traces')
+        .insert({
+          organization_id: orgId,
+          program_id: programId,
+          path: trace.path,
+          url: trace.url,
+          method: trace.method,
+          attempt: trace.attempt,
+          started_at: trace.startedAt,
+          finished_at: trace.finishedAt,
+          http_status: trace.status,
+          ok: trace.ok,
+          error_message: trace.error,
+          request_body: trace.requestBody || {},
+        });
+    } catch (err) {
+      console.warn('Failed to insert into invite_request_traces:', err);
+    }
+
+    try {
+      const body = trace.requestBody || {};
+      const recipient = body.email || body.recipientEmail || 'Unknown recipient';
+      const methodPath = `${trace.method} ${trace.path}`;
+      const statusText = trace.ok ? `${trace.status ?? 200}` : (trace.status ? `failed (${trace.status})` : 'failed (NETWORK)');
+
+      let action = 'Invite request trace';
+      if (trace.path.includes('/team')) {
+        action = 'Sent team invite';
+      } else if (trace.path.includes('/judge')) {
+        action = 'Sent judge invite';
+      } else if (trace.path.includes('/resend')) {
+        action = 'Resent invite';
+      }
+
+      let details = `${methodPath} for ${recipient}. Status: ${statusText}. Attempt ${trace.attempt}`;
+      if (trace.error) {
+        details += `. Error: ${trace.error}`;
+      }
+
+      const token = body.token || (body.inviteUrl ? new URL(body.inviteUrl).searchParams.get('teamInviteToken') : null);
+      const siteOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+      const inviteLink = token ? `${siteOrigin}/team-invite/${token}` : null;
+      if (inviteLink) {
+        details += `. Link: ${inviteLink}`;
+      }
+
+      await this.safeAuditLog({
+        action,
+        actionType: trace.ok ? 'create' : 'warning',
+        resourceType: 'invite_request',
+        resourceId: programId || undefined,
+        details,
+        metadata: {
+          path: trace.path,
+          method: trace.method,
+          status: trace.status,
+          attempt: trace.attempt,
+          error: trace.error,
+          recipient,
+          token,
+          inviteLink
+        }
       });
+    } catch (err) {
+      console.warn('Failed to create audit log for invite request trace:', err);
+    }
   }
 
   async clearInviteRequestTraces(programId: string): Promise<void> {

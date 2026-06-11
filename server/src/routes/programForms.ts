@@ -1,9 +1,16 @@
+import { randomUUID } from 'crypto';
 import { Router } from 'express';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 import { canAccessProgram } from '../middleware/programAccess.js';
 import { getSupabaseAdmin } from '../supabase.js';
 
 const router = Router();
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function resolveFieldId(rawId: unknown): string {
+  return typeof rawId === 'string' && UUID_RE.test(rawId) ? rawId : randomUUID();
+}
 
 async function ensureCanAccessProgram(req: AuthenticatedRequest, programId: string) {
   if (!req.userId) {
@@ -218,7 +225,7 @@ router.put('/:formId/fields', requireAuth, async (req, res) => {
 
     const incomingIds = fields
       .map((field: any) => field.id)
-      .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0);
+      .filter((id: unknown): id is string => typeof id === 'string' && UUID_RE.test(id));
 
     if (incomingIds.length > 0) {
       const { data: existingFields } = await supabase
@@ -253,7 +260,7 @@ router.put('/:formId/fields', requireAuth, async (req, res) => {
 
     if (fields.length > 0) {
       const payload = fields.map((field: any, index: number) => ({
-        ...(typeof field.id === 'string' && field.id ? { id: field.id } : {}),
+        id: resolveFieldId(field.id),
         form_id: formId,
         label: field.label,
         type: field.type,

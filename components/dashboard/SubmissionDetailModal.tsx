@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { forms as formsService } from '../../services/supabase';
 import { User, Mail, Calendar, Tag, FileText, CheckCircle, XCircle, Clock, Gavel, ExternalLink, Image as ImageIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { extractSubmissionResponses, getSubmissionFormId } from '../../lib/submissionFormData';
 
 interface SubmissionDetailModalProps {
     isOpen: boolean;
@@ -25,10 +26,9 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({ is
         'Under Review': { color: 'text-blue-600 bg-blue-50 border-blue-100', icon: <Clock className="w-3 h-3" /> },
     };
 
-    // Extract the actual form responses from the nested structure
     const submissionData = (submission.submissionData || {}) as Record<string, any>;
-    const formId = submissionData.form_id || null;
-    const actualResponses: Record<string, any> = submissionData.responses || submissionData;
+    const formId = getSubmissionFormId(submissionData);
+    const actualResponses = extractSubmissionResponses(submissionData);
 
     // Load form fields to resolve field IDs → labels
     const { data: formFieldsData } = useQuery({
@@ -55,9 +55,7 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({ is
 
     // Filter out metadata keys and prepare display entries
     const displayEntries = useMemo(() => {
-        const metaKeys = new Set(['form_id', 'form_title', 'submitted_at', 'responses']);
         return Object.entries(actualResponses)
-            .filter(([key]) => !metaKeys.has(key))
             .map(([key, value]) => {
                 const fieldInfo = fieldLabelMap.get(key);
                 const label = fieldInfo?.label || key.replace(/_/g, ' ');

@@ -132,6 +132,32 @@ export interface JudgeGroup {
   judgeCount: number;
 }
 
+export interface JudgeRoundAssignment {
+  submissionJudgeId: string;
+  submissionId: string;
+  submissionTitle: string;
+  applicantName?: string;
+  status: string;
+}
+
+export interface RoundJudgeScoreRow {
+  id: string;
+  name: string;
+  email: string;
+  assignedCount: number;
+  completedCount: number;
+  progress: number;
+  assignments: JudgeRoundAssignment[];
+}
+
+export interface RoundJudgeScoreGroup {
+  roundId: string;
+  roundTitle: string;
+  roundType: string;
+  roundStatus: string;
+  judges: RoundJudgeScoreRow[];
+}
+
 
 // Organization/team member (comes from `organization_members` + `profiles` + `roles`)
 export interface TeamMember {
